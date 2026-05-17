@@ -8,23 +8,25 @@ interface POSContextType {
     currentUser: User | null;
     login: (userid: string, pin: string) => boolean;
     logout: () => void;
+
+    cart: CartItem[];
+    addToCart: (product: Product, quantity: number) => void;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
 
 export function POSProvider({ children }: { children: React.ReactNode }) {
+
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [cart, setCart] = useState<CartItem[]>([]);
 
     const login = useCallback((userId: string, pin: string): boolean => {
-        const user = MOCK_USERS.find((u) => u.id === userId && u.pin === pin);
-                
+        const user = MOCK_USERS.find((u) => u.id === userId && u.pin === pin);                
         if(user) {
             setCurrentUser(user);
             return true
-        }
-    return false;    
-
+        }     
+        return false;    
     }, []);
 
     const logout = useCallback(() => {
@@ -32,16 +34,30 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         setCart([]);
     }, []);
 
+   const addToCart = useCallback((product: Product, quantity: number) => {
+        setCart((prev) => {
+            const existingItem = prev.find((item) => item.product.id === product.id)
+            if(existingItem){
+                return prev.map((item) => 
+                        item.product.id === product.id ?
+                            { ...item, quantity: item.quantity + quantity}
+                            : item
+            )};
+            return [ ...prev, { product, quantity} ]
+        })
+    }, []);
+ 
     const value: POSContextType = {
         currentUser,
         login,
         logout: () => setCurrentUser(null),
+        cart,
+        addToCart
     };
 
 
     return <POSContext.Provider value={value}>{children}</POSContext.Provider>;
 }
-
 
 
 export function usePOS() {

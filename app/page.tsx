@@ -8,42 +8,41 @@
   import { Input } from '@/components/ui/input';
   import { Button } from '@/components/ui/button';
   import { MOCK_USERS } from '@/lib/data';
-import { AlertCircle } from 'lucide-react';
-
+  import { AlertCircle } from 'lucide-react';
 
 
 
   export default function LoginPage() {
 
-  const router = useRouter();
-  const [error, setError] = useState<string>('');
-  const [selectedUser, setSelectedUser] = useState<string>('');
-  const [pin, setPin] = useState<string>('');
-  const {login} = usePOS();
-  const [loading, setLoading] = useState<boolean>(false);
+      const router = useRouter();
+      const [error, setError] = useState<string>('');
+      const [selectedUser, setSelectedUser] = useState<string>('');
+      const [pin, setPin] = useState<string>('');
+      const {login} = usePOS();
+      const [loading, setLoading] = useState<boolean>(false);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+      const handleLogin = (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
 
-    if(!selectedUser || !pin) {
-      setError('Please select username and enter PIN');
-      setLoading(false);
-      return;
-    }
+        if(!selectedUser || !pin) {
+          setError('Please select username and enter PIN');
+          setLoading(false);
+          return;
+        }
 
-    const success = login(selectedUser, pin);[]
+        const success = login(selectedUser, pin);[]
 
-    if(success) {
-      router.push('/cashier');
-    } else {
-      setError('Invalid PIN. Please try again.');
-    }
+        if(success) {
+          router.push('/cashier');
+        } else {
+          setError('Invalid PIN. Please try again.');
+        }
 
-    setLoading(false);
+        setLoading(false);
 
-  };
+      };
 
 
   return (
@@ -83,10 +82,11 @@ import { AlertCircle } from 'lucide-react';
               <label htmlFor="pin" className='font-bold'>Enter PIN</label>
               <Input id="pin"
                      type="password" 
-                     value={pin}
                      placeholder='Enter PIN'
+                     value={pin}
                      onChange={(e) => setPin(e.target.value)}
                      maxLength={4}
+                     className="[&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
               />
             </div>
 
