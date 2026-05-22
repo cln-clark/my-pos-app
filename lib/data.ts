@@ -1,264 +1,45 @@
-import { Product, User, Transaction } from './types';
+  import { Product, User, Transaction, Role, Category } from './types';
+  import { invoke } from '@tauri-apps/api/core';
+  import { Role as MockRole } from './types';
 
-export const MOCK_USERS: User[] = [
-  {
-    id: '1',
-    name: 'Alice Johnson',
-    email: 'alice@store.com',
-    role: 'cashier',
-    pin: '1234',
-  },
-  {
-    id: '2',
-    name: 'Bob Smith',
-    email: 'bob@store.com',
-    role: 'cashier',
-    pin: '5678',
-  },
-  {
-    id: '3',
-    name: 'Manager Sarah',
-    email: 'sarah@store.com',
-    role: 'manager',
-    pin: '9999',
-  },
-];
 
-export const MOCK_PRODUCTS: Product[] = [
-  // Beverages
-  {
-    id: 'p1',
-    name: 'Coca Cola 2L',
-    sku: 'COK-2L',
-    price: 3.99,
-    stock: 45,
-    category: 'Beverages',
-    description: 'Classic Coca Cola 2 liter bottle',
-  },
-  {
-    id: 'p2',
-    name: 'Orange Juice 1L',
-    sku: 'OJ-1L',
-    price: 2.49,
-    stock: 32,
-    category: 'Beverages',
-    description: 'Fresh orange juice',
-  },
-  {
-    id: 'p3',
-    name: 'Bottled Water 500ml',
-    sku: 'WATER-500',
-    price: 1.29,
-    stock: 120,
-    category: 'Beverages',
-    description: 'Pure bottled water',
-  },
-  // Snacks
-  {
-    id: 'p4',
-    name: 'Doritos Nacho Cheese',
-    sku: 'DOR-NC',
-    price: 2.99,
-    stock: 28,
-    category: 'Snacks',
-    description: 'Crispy nacho cheese chips',
-  },
-  {
-    id: 'p5',
-    name: 'Lay\'s Classic Chips',
-    sku: 'LAY-CL',
-    price: 2.49,
-    stock: 15,
-    category: 'Snacks',
-    description: 'Classic salted potato chips',
-  },
-  {
-    id: 'p6',
-    name: 'Candy Bar Mix',
-    sku: 'CAND-MX',
-    price: 1.49,
-    stock: 85,
-    category: 'Snacks',
-    description: 'Assorted candy bars',
-  },
-  // Dairy
-  {
-    id: 'p7',
-    name: 'Whole Milk Gallon',
-    sku: 'MILK-G',
-    price: 4.29,
-    stock: 22,
-    category: 'Dairy',
-    description: 'Fresh whole milk',
-  },
-  {
-    id: 'p8',
-    name: 'Cheddar Cheese Block',
-    sku: 'CHEE-BLK',
-    price: 5.99,
-    stock: 18,
-    category: 'Dairy',
-    description: 'Sharp cheddar cheese block',
-  },
-  {
-    id: 'p9',
-    name: 'Yogurt 6-pack',
-    sku: 'YOG-6PK',
-    price: 3.49,
-    stock: 41,
-    category: 'Dairy',
-    description: 'Vanilla yogurt 6-pack',
-  },
-  // Bread & Bakery
-  {
-    id: 'p10',
-    name: 'Whole Wheat Bread',
-    sku: 'BREAD-WW',
-    price: 2.99,
-    stock: 12,
-    category: 'Bakery',
-    description: 'Fresh whole wheat bread',
-  },
-  {
-    id: 'p11',
-    name: 'Croissants 4-pack',
-    sku: 'CROI-4PK',
-    price: 3.99,
-    stock: 8,
-    category: 'Bakery',
-    description: 'Fresh butter croissants',
-  },
-  {
-    id: 'p12',
-    name: 'Bagels 6-pack',
-    sku: 'BAG-6PK',
-    price: 4.49,
-    stock: 20,
-    category: 'Bakery',
-    description: 'Assorted fresh bagels',
-  },
-  // Produce
-  {
-    id: 'p13',
-    name: 'Apples (per lb)',
-    sku: 'APPLE-LB',
-    price: 0.99,
-    stock: 150,
-    category: 'Produce',
-    description: 'Fresh red apples',
-  },
-  {
-    id: 'p14',
-    name: 'Bananas (per lb)',
-    sku: 'BAN-LB',
-    price: 0.59,
-    stock: 200,
-    category: 'Produce',
-    description: 'Fresh yellow bananas',
-  },
-  {
-    id: 'p15',
-    name: 'Carrots 2lb Bag',
-    sku: 'CAR-2LB',
-    price: 1.49,
-    stock: 35,
-    category: 'Produce',
-    description: 'Fresh carrots',
-  },
-  // Frozen Foods
-  {
-    id: 'p16',
-    name: 'Frozen Pizza',
-    sku: 'PIZZA-FRZ',
-    price: 6.99,
-    stock: 25,
-    category: 'Frozen',
-    description: 'Pepperoni pizza',
-  },
-  {
-    id: 'p17',
-    name: 'Frozen Vegetables Mix',
-    sku: 'VEG-FRZ',
-    price: 2.49,
-    stock: 40,
-    category: 'Frozen',
-    description: 'Mixed frozen vegetables',
-  },
-  {
-    id: 'p18',
-    name: 'Ice Cream 1.5L',
-    sku: 'ICE-1.5L',
-    price: 5.99,
-    stock: 30,
-    category: 'Frozen',
-    description: 'Vanilla ice cream',
-  },
-  // Household
-  {
-    id: 'p19',
-    name: 'Laundry Detergent',
-    sku: 'LAUN-DET',
-    price: 8.99,
-    stock: 19,
-    category: 'Household',
-    description: 'Large bottle detergent',
-  },
-  {
-    id: 'p20',
-    name: 'Paper Towels 12-pack',
-    sku: 'PAPER-12PK',
-    price: 9.99,
-    stock: 50,
-    category: 'Household',
-    description: 'Premium paper towels',
-  },
-];
+  export async function getProducts() {
+    try {
+      const products = await invoke('get_products');
+      return products as Product[];
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      return [];
+    }
+  }
 
-const today = new Date();
-export const MOCK_TRANSACTIONS: Transaction[] = [
-  {
-    id: 'tx1',
-    cashierId: '1',
-    cashierName: 'Alice Johnson',
-    timestamp: new Date(today.getTime() - 120000),
-    items: [
-      { product: MOCK_PRODUCTS[0], quantity: 1 },
-      { product: MOCK_PRODUCTS[3], quantity: 2 },
-    ],
-    subtotal: 9.97,
-    tax: 0.75,
-    total: 10.72,
-    paymentMethod: 'cash',
-    change: 9.28,
-  },
-  {
-    id: 'tx2',
-    cashierId: '2',
-    cashierName: 'Bob Smith',
-    timestamp: new Date(today.getTime() - 300000),
-    items: [
-      { product: MOCK_PRODUCTS[7], quantity: 1 },
-      { product: MOCK_PRODUCTS[1], quantity: 1 },
-    ],
-    subtotal: 8.48,
-    tax: 0.64,
-    total: 9.12,
-    paymentMethod: 'card',
-  },
-  {
-    id: 'tx3',
-    cashierId: '1',
-    cashierName: 'Alice Johnson',
-    timestamp: new Date(today.getTime() - 600000),
-    items: [
-      { product: MOCK_PRODUCTS[13], quantity: 3 },
-      { product: MOCK_PRODUCTS[14], quantity: 2 },
-      { product: MOCK_PRODUCTS[9], quantity: 1 },
-    ],
-    subtotal: 7.42,
-    tax: 0.56,
-    total: 7.98,
-    paymentMethod: 'cash',
-    change: 2.02,
-  },
-];
+  export async function getCategories() {
+    try {
+      const categories = await invoke('get_categories');
+      return categories as Category[];
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      return [];
+    }
+  }
+
+  export async function getUsers() {
+    try {
+      const users = await invoke('get_users');
+      const roles = await invoke('get_roles');
+
+      return (users as any[]).map(user => ({
+        ...user,
+        id: user.id.toString(),
+        role: (roles as any[]).find((r: any) => r.id === user.role_id)?.role_name ? {
+          id: (roles as any[]).find((r: any) => r.id === user.role_id).id,
+          name: (roles as any[]).find((r: any) => r.id === user.role_id).role_name
+        } : null
+      })) as User[];
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      return [];
+    }
+  }
+
+

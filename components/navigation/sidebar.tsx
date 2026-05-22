@@ -29,7 +29,7 @@ export function Sidebar() {
       href: '/cashier',
       icon: ShoppingCart,
     },
-    ...(currentUser.role === 'manager'
+    ...(currentUser.role.name === 'manager'
       ? [
           {
             label: 'Inventory',
@@ -59,14 +59,14 @@ export function Sidebar() {
         </div>
 
         {/* Sidebar */}
-        <aside className={`fixed top-0 left-0 h-screen w-64 bg-slate-900 text-white p-6 transform transition-transform duration-300
+        <aside className={`fixed top-0 left-0 h-screen w-56 bg-slate-900 text-white p-6 transform transition-transform duration-300
                         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
                         md:translate-x-0 md:relative md:h-auto z-40`}
         >
             <div className='flex flex-col h-full'>
                 {/* Logo */}
                 <div className="mb-8 pt-8 md:pt-0">
-                    <h1 className="text-2xl font-bold">RetailPOS</h1>
+                    <h1 className="text-2xl font-bold">POS</h1>
                     <p className="text-sm text-slate-400">Point of Sale</p>
                 </div>
 
@@ -74,7 +74,7 @@ export function Sidebar() {
                 <div className="bg-slate-800 rounded-lg p-4 mb-6">
                     <p className="text-sm text-slate-400">Logged in as</p>
                     <p className="font-semibold text-white">{currentUser.name}</p>
-                    <p className="text-xs text-slate-400 capitalize">{currentUser.role}</p>
+                    <p className="text-xs text-slate-400 capitalize">{currentUser.role.name}</p>
                 </div>
 
                 <nav className='flex-1 space-y-2'>
@@ -98,7 +98,7 @@ export function Sidebar() {
 
                 <Button variant="outline"
                         onClick={ handleLogout}
-                        className='w-full mt-auto text-black border-slate-600 hover:text-white hover:bg-slate-800'
+                        className='h-13 mt-auto text-black font-bold border-slate-600 hover:text-white hover:bg-slate-800'
                 >
                     <LogOut className='h-4 w-4 mr-2'></LogOut>
                     Logout

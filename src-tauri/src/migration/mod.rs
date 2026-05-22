@@ -1,0 +1,32 @@
+pub mod m20250120_000001_create_roles_table;
+pub mod m20250120_000002_create_categories_table;
+pub mod m20250120_000003_create_products_table;
+pub mod m20250120_000004_create_txn_mode_table;
+pub mod m20250120_000005_create_payment_type_table;
+pub mod m20250120_000006_create_transaction_head_table;
+pub mod m20250120_000007_create_transaction_dtl_table;
+pub mod m20250120_000008_create_company_code_table;
+pub mod m20250120_000009_create_store_code_table;
+pub mod m20250120_000010_create_users_table;
+
+pub use sea_orm_migration::prelude::*;
+
+pub struct Migrator;
+
+#[async_trait::async_trait]
+impl MigratorTrait for Migrator {
+    fn migrations() -> Vec<Box<dyn MigrationTrait>> {
+        vec![
+            Box::new(m20250120_000001_create_roles_table::Migration),
+            Box::new(m20250120_000002_create_categories_table::Migration),
+            Box::new(m20250120_000003_create_products_table::Migration),
+            Box::new(m20250120_000004_create_txn_mode_table::Migration),
+            Box::new(m20250120_000005_create_payment_type_table::Migration),
+            Box::new(m20250120_000006_create_transaction_head_table::Migration),
+            Box::new(m20250120_000007_create_transaction_dtl_table::Migration),
+            Box::new(m20250120_000008_create_company_code_table::Migration),
+            Box::new(m20250120_000009_create_store_code_table::Migration),
+            Box::new(m20250120_000010_create_users_table::Migration),
+        ]
+    }
+}
