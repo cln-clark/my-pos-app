@@ -51,10 +51,11 @@ export function Sidebar() {
         {/* Mobile Menu Button */}
         <div className='md:hidden fixed top-4 left-4 z-50'>
             <Button variant="outline"
-                    size="icon"
+                    size="lg"
                     onClick={() => setIsOpen(!isOpen)}
+                    className="h-12 w-12"
             >
-                        { isOpen ? <X className='w-4 h-4' /> : <Menu className='w-4 h-4' /> }
+                        { isOpen ? <X className='w-6 h-6' /> : <Menu className='w-6 h-6' /> }
             </Button>
         </div>
 
@@ -79,33 +80,33 @@ export function Sidebar() {
 
                 <nav className='flex-1 space-y-2'>
                     { menuItems.map((item) => {
-                        const Icon = item.icon; 
+                        const Icon = item.icon;
                         const isActive = pathname === item.href;
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
                                 onClick={() => setIsOpen(false)}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors 
+                                className={`flex items-center gap-3 px-4 py-4 rounded-lg transition-colors active:scale-95
                                             ${ isActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}
                                 `}>
-                                <Icon className='w-4 h-4' />
-                                {item.label}
+                                <Icon className='w-5 h-5' />
+                                <span className="text-base">{item.label}</span>
                             </Link>
                         );
                     })}
                 </nav>
 
                 <Button variant="outline"
-                        onClick={ handleLogout}
-                        className='h-13 mt-auto text-black font-bold border-slate-600 hover:text-white hover:bg-slate-800'
+                        onClick={ handleLogout }
+                        className='h-12 mt-auto text-black font-bold border-slate-600 hover:text-white hover:bg-slate-800 active:scale-95 transition-transform'
                 >
-                    <LogOut className='h-4 w-4 mr-2'></LogOut>
-                    Logout
+                    <LogOut className='h-5 w-5 mr-2'></LogOut>
+                    <span className="text-base">Logout</span>
                 </Button>
 
             </div>
-            
+
         </aside>
 
         {/* Mobile Overlay */}
@@ -116,7 +117,6 @@ export function Sidebar() {
             />
         )}
 
-    
     </>
 
  );

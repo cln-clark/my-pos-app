@@ -13,7 +13,7 @@ export function ProductGrid() {
     const [selectedCategory, setSelectedCategory] = useState("All");
       
     const categories = useMemo(() => {
-        const cats = ['All', ...new Set(products.map(p => p.category))]
+        const cats = ['All', ...new Set(products.map(p => p.category || 'Uncategorized'))]
         return cats
     }, [products])
 
@@ -26,22 +26,22 @@ export function ProductGrid() {
     }, [products, searchQuery, selectedCategory])
     
     return(
-        <div className="flex flex-col h-full gap-4">
+        <div className="flex flex-col h-full gap-3">
             {/* Search and Filter - Fixed at top */}
             <div className="space-y-3 shrink-0">
                 <Input placeholder="Search products..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-10"
+                    className="h-12 text-base"
                 />
                 <div className="flex gap-2 overflow-x-auto pb-2">
                     {categories.map((category) => (
                         <Button
                         key={category}
                         variant={selectedCategory === category ? 'default' : 'outline'}
-                        size="sm"
+                        size="default"
                         onClick={() => setSelectedCategory(category)}
-                        className="whitespace-nowrap"
+                        className="whitespace-nowrap h-10 active:scale-95 transition-transform"
                         >
                         {category}
                         </Button>
@@ -51,28 +51,23 @@ export function ProductGrid() {
 
             {/* Product Grid - Scrollable */}
             <div className="flex-1 overflow-y-auto min-h-0">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                     {   filteredProducts.map((product) => (
-                        <Card   key={product.id}
-                                onClick={(e) => { addToCart(product, 1)}}
-                                className={`border border-slate-250 p-3 cursor-pointer transition-all hover:shadow-lg flex flex-col ${product.stock === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        <Card   key={`${product.id}-${product.sku}`}
+                                onClick={(e) => { if (product.stock > 0) addToCart(product, 1)}}
+                                className={`border border-slate-200 p-3 cursor-pointer transition-all active:scale-95 flex flex-col ${product.stock === 0 ? 'opacity-50 cursor-not-allowed' : 'active:border-blue-500'}`}
                                 >
-                                {/* Product Image */}
-                                <div className="w-full aspect-square bg-gradient-to-br from-slate-200 to-slate-300 rounded-lg mb-3 flex items-center justify-center">
-                                    <span className="text-4xl">📦</span>
-                                </div>
-
                                 {/* Product Info */}
                                 <div className="text-center flex flex-col flex-1">
-                                    <h3 className="font-semibold text-sm line-clamp-2">{product.name}</h3>
-                                    <p className="text-xs text-gray-500">{product.sku}</p>
+                                    <h3 className="font-semibold text-sm line-clamp-2 mb-1">{product.name}</h3>
+                                    <p className="text-xs text-gray-500 mb-2">{product.sku}</p>
                                     <p className="text-lg font-bold text-green-600 mt-auto">₱{product.price.toFixed(2)}</p>
                                 </div>
 
                                 {/* Stock Status */}
-                                <p className={`text-xs ${
+                                <p className={`text-xs font-medium mt-2 ${
                                     product.stock < 10
-                                    ? 'text-red-600 font-semibold'
+                                    ? 'text-red-600'
                                     : 'text-muted-foreground'
                                 }`}>
                                     {product.stock > 0 ? `Stock: ${product.stock}` : 'Out of stock'}

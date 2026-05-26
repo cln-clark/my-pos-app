@@ -78,33 +78,33 @@
         <div className="flex w-full max-w-6xl flex-col lg:flex-row gap-6">
           {/* Login Form - Left Side */}
           <Card className="flex-1">
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-3xl font-bold">POS</CardTitle>
-              <CardDescription>Point of Sale System</CardDescription>
+            <CardHeader className="space-y-2 pb-6">
+              <CardTitle className="text-4xl font-bold">POS</CardTitle>
+              <CardDescription className="text-base">Point of Sale System</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-6">
                 { error && (
                 <Alert variant="destructive">
-                  <AlertCircle className='w-4 h-4'></AlertCircle>
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertCircle className='w-5 h-5'></AlertCircle>
+                  <AlertDescription className="text-base">{error}</AlertDescription>
                 </Alert>
                 )}
 
-                <div className='space-y-2'>
-                  <label htmlFor="user" className='text-sm font-medium'>Select Cashier</label>
+                <div className='space-y-3'>
+                  <label htmlFor="user" className='text-base font-semibold'>Select Cashier</label>
                   <Select value={selectedUser} onValueChange={setSelectedUser}>
-                    <SelectTrigger className="flex mt-2 h-10 w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                    <SelectTrigger className="flex mt-2 h-12 w-full items-center justify-between rounded-lg border border-input bg-background px-4 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
                       <SelectValue placeholder="Select Cashier" />
                     </SelectTrigger>
                     <SelectContent className="w-full">
                       <SelectGroup>
-                        <SelectLabel>Select Cashier</SelectLabel>
+                        <SelectLabel className="text-base">Select Cashier</SelectLabel>
                         { users.filter((user) => user.role.id === 1 || user.role.id === 2)
                                 .map((user) => (
-                                <SelectItem key={user.id} 
+                                <SelectItem key={user.id}
                                             value={user.id.toString()}
-                                            className="w-full cursor-pointer">
+                                            className="w-full cursor-pointer py-3 text-base">
                                   {user.name}
                                 </SelectItem>
                         ))}
@@ -112,22 +112,22 @@
 
                     </SelectContent>
                   </Select>
-                  
+
                 </div>
 
-                <div className='space-y-2'>
-                  <label htmlFor="pin" className='text-sm rounded-lg font-medium'>Enter PIN</label>
+                <div className='space-y-3'>
+                  <label htmlFor="pin" className='text-base font-semibold'>Enter PIN</label>
                   <Input id="pin"
                         type="password"
                         placeholder='Enter PIN'
                         value={pin}
                         onChange={(e) => setPin(e.target.value)}
                         maxLength={4}
-                        className="mt-2 h-12 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
+                        className="mt-2 h-14 text-lg text-center [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
                   />
                 </div>
 
-                <Button type="submit" disabled={loading} className='h-16 w-full text-base tracking-wider font-bold md:text-lg'>
+                <Button type="submit" disabled={loading} className='h-14 w-full text-lg tracking-wider font-bold active:scale-95 transition-transform'>
                   {loading ? 'Logging in...' : 'Login'}
                 </Button>
 

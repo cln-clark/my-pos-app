@@ -33,7 +33,7 @@ export function Numpad({
                             key={num}
                             type="button"
                             variant="outline"
-                            className="h-16 text-2xl font-bold"
+                            className="h-16 text-2xl font-bold active:scale-95 transition-transform"
                             onClick={() => onDigitClick(num.toString())}
                             disabled={disabled}
                         >
@@ -43,7 +43,7 @@ export function Numpad({
                     <Button
                         type="button"
                         variant="destructive"
-                        className="h-16 text-lg font-bold"
+                        className="h-16 text-lg font-bold active:scale-95 transition-transform"
                         onClick={onClear}
                         disabled={disabled}
                     >
@@ -52,7 +52,7 @@ export function Numpad({
                     <Button
                         type="button"
                         variant="outline"
-                        className="h-16 text-2xl font-bold"
+                        className="h-16 text-2xl font-bold active:scale-95 transition-transform"
                         onClick={() => onDigitClick('0')}
                         disabled={disabled}
                     >
@@ -61,7 +61,7 @@ export function Numpad({
                     <Button
                         type="button"
                         variant="outline"
-                        className="h-16 text-lg font-bold"
+                        className="h-16 text-lg font-bold active:scale-95 transition-transform"
                         onClick={onBackspace}
                         disabled={disabled}
                     >

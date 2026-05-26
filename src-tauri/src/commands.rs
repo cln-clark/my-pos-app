@@ -1,4 +1,4 @@
-    use crate::entity::{role, user, product, txn_head, txn_dtl, category};
+    use crate::entity::{role, user, product, txn_head, txn_dtl, category, discount_code};
     use crate::AppState;
     use sea_orm::ConnectionTrait;
     use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, ActiveModelTrait, Set, Statement};
@@ -45,9 +45,16 @@
         pub store_code: i32,
         pub terminal_id: i32,
         pub product_id: i32,
+        pub sku: String,
+        pub product_name: String,
+        pub line_sequence: i32,
         pub qty: i32,
-        pub price: f64,
-        pub subtotal: f64,
+        pub unit_price_incl_tax: f64,
+        pub txn_mode_code: i32,
+        pub ordered_date: String,
+        pub ordered_time: String,
+        pub discount_code_id: Option<i32>,
+        pub discount_qty: i32,
         pub business_date: String,
         pub category_code: String,
     }
@@ -199,6 +206,34 @@
         Ok(category_responses)
     }
 
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct DiscountCodeResponse {
+        pub id: i32,
+        pub name: String,
+        pub percent: f64,
+    }
+
+    #[tauri::command]
+    pub async fn get_discount_codes(state: State<'_, AppState>) -> Result<Vec<DiscountCodeResponse>, String> {
+        let db = &state.db;
+
+        let discount_codes = discount_code::Entity::find()
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let discount_responses: Vec<DiscountCodeResponse> = discount_codes
+            .into_iter()
+            .map(|d| DiscountCodeResponse {
+                id: d.id,
+                name: d.name,
+                percent: d.percent,
+            })
+            .collect();
+
+        Ok(discount_responses)
+    }
+
     #[tauri::command]
     pub async fn create_transaction(
         transaction_data: TransactionRequest,
@@ -231,10 +266,10 @@
             None => 1,
         };
 
-        // Step 3 — Query sqlite_sequence to get next invoice_no
+        // Step 3 — Query for max invoice_no
         let invoice_no_result = db.query_one(Statement::from_string(
                                             sea_orm::DatabaseBackend::Sqlite,
-                                            "SELECT seq + 1 AS next_invoice FROM sqlite_sequence WHERE name = 'txn_head'".to_owned(),
+                                            "SELECT COALESCE(MAX(invoice_no), 0) + 1 AS next_invoice FROM txn_head".to_owned(),
             )).await
             .map_err(|e| e.to_string())?;
 
@@ -280,9 +315,16 @@
                 transaction_no: Set(transaction_no),
                 invoice_no: Set(invoice_no),
                 product_id: Set(item.product_id),
+                sku: Set(item.sku),
+                product_name: Set(item.product_name),
+                line_sequence: Set(item.line_sequence),
                 qty: Set(item.qty),
-                price: Set(item.price),
-                subtotal: Set(item.subtotal),
+                unit_price_incl_tax: Set(item.unit_price_incl_tax),
+                txn_mode_code: Set(item.txn_mode_code),
+                ordered_date: Set(item.ordered_date),
+                ordered_time: Set(item.ordered_time),
+                discount_code_id: Set(item.discount_code_id),
+                discount_qty: Set(item.discount_qty),
                 business_date: Set(item.business_date),
                 category_code: Set(item.category_code),
                 ..Default::default()

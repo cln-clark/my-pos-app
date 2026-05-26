@@ -22,7 +22,7 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .name("fk-products-category_id")
                             .from(Products::Table, Products::CategoryId)
-                            .to(Category::Table, Category::Id)
+                            .to(Categories::Table, Categories::Id)
                             .on_delete(ForeignKeyAction::SetNull),
                     )
                     .to_owned(),
@@ -30,18 +30,6 @@ impl MigrationTrait for Migration {
             .await?;
 
         let db = manager.get_connection();
-        db.execute_unprepared("
-                            INSERT OR IGNORE INTO categories (category_code, category_name) VALUES
-                            ('BEV', 'Beverages'),
-                            ('FOO', 'Food'),
-                            ('MEAL', 'Meals'),
-                            ('SID', 'Sides'),
-                            ('ADD', 'Add-ons'),
-                            ('DES', 'Desserts'),
-                            ('BRK', 'Breakfast'),
-                            ('FEE', 'Fees');
-                            ").await?;
-
         db.execute_unprepared("
                             INSERT OR IGNORE INTO products (name, sku, price, stock, category_id, description) VALUES
                             ('Hot Coffee','DRK-HC',50.00,999,1,'Fresh brewed hot coffee'),
@@ -94,9 +82,9 @@ enum Products {
     Stock,
     Description,
 }
-
+            
 #[derive(DeriveIden)]
-enum Category {
+enum Categories {
     Table,
     Id,
 }

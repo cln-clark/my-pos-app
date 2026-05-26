@@ -5,18 +5,27 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "txn_dtl")]
 pub struct Model {
     #[sea_orm(primary_key)]
+    pub id: i32,
     pub company_code: i32,
-    #[sea_orm(primary_key)]
     pub store_code: i32,
-    #[sea_orm(primary_key)]
     pub terminal_id: i32,
-    #[sea_orm(primary_key)]
     pub transaction_no: i32,
     pub invoice_no: i32,
     pub product_id: i32,
+    #[sea_orm(column_type = "Text")]
+    pub sku: String,
+    #[sea_orm(column_type = "Text")]
+    pub product_name: String,
+    pub line_sequence: i32,
     pub qty: i32,
-    pub price: f64,
-    pub subtotal: f64,
+    pub unit_price_incl_tax: f64,
+    pub txn_mode_code: i32,
+    #[sea_orm(column_type = "Text")]
+    pub ordered_date: String,
+    #[sea_orm(column_type = "Text")]
+    pub ordered_time: String,
+    pub discount_code_id: Option<i32>,
+    pub discount_qty: i32,
     #[sea_orm(column_type = "Text")]
     pub business_date: String,
     #[sea_orm(column_type = "Text")]

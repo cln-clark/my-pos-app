@@ -9,40 +9,55 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(Category::Table)
+                    .table(Categories::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(Category::Id)
+                        ColumnDef::new(Categories::Id)
                             .integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
                     .col(
-                        ColumnDef::new(Category::CategoryCode)
+                        ColumnDef::new(Categories::CategoryCode)
                             .string()
                             .not_null()
                             .unique_key(),
                     )
                     .col(
-                        ColumnDef::new(Category::CategoryName)
+                        ColumnDef::new(Categories::CategoryName)
                             .string()
                             .not_null(),
                     )
                     .to_owned(),
             )
             .await?;
+
+            let db = manager.get_connection();
+            db.execute_unprepared("
+                                INSERT OR IGNORE INTO categories (category_code, category_name) VALUES
+                                ('BEV', 'Beverages'),
+                                ('FOO', 'Food'),
+                                ('MEAL', 'Meals'),
+                                ('SID', 'Sides'),
+                                ('ADD', 'Add-ons'),
+                                ('DES', 'Desserts'),
+                                ('BRK', 'Breakfast'),
+                                ('FEE', 'Fees');
+                                ").await?;
+                                
+        Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(Category::Table).to_owned())
+            .drop_table(Table::drop().table(Categories::Table).to_owned())
             .await
     }
 }
 
 #[derive(DeriveIden)]
-enum Category {
+enum Categories {
     Table,
     Id,
     CategoryCode,

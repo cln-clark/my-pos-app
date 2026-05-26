@@ -7,6 +7,8 @@ export interface ReceiptData {
     quantity: number;
     price: number;
     subtotal: number;
+    discountDescription?: string;
+    discountAmount?: number;
   }>;
   subtotal: number;
   tax: number;
@@ -18,6 +20,16 @@ export interface ReceiptData {
   discount?: number;
   itemsSold?: number;
   guestCount?: number;
+  // VAT breakdown
+  vatableSales?: number;
+  vatExemptSales?: number;
+  vatAmount12Pct?: number;
+  seniorDiscountAmount?: number;
+  pwdDiscountAmount?: number;
+  athleteDiscountAmount?: number;
+  regularDiscountAmount?: number;
+  grossSales?: number;
+  netSales?: number;
 }
 
 export function generateReceiptText(data: ReceiptData): string {
@@ -66,6 +78,11 @@ export function generateReceiptText(data: ReceiptData): string {
     const subtotal = `₱${item.subtotal.toFixed(2)}`.padStart(12); // 12 chars
 
     receipt += `${name}${qty}${price}${subtotal}\n`;
+    if (item.discountDescription && item.discountAmount) {
+      const discLabel = `  Disc: ${item.discountDescription}`.padEnd(20);
+      const discAmount = `-₱${item.discountAmount.toFixed(2)}`.padStart(28);
+      receipt += `${discLabel}${discAmount}\n`;
+    }
   });
 
   receipt += '------------------------------------------------\n'; // 48 dashes
@@ -78,8 +95,41 @@ const moneyLine = (label: string, value: number): string =>
 // Totals (now aligned to item table width)
 receipt += '\n';
 receipt += moneyLine('Subtotal', data.subtotal) + '\n';
-receipt += moneyLine('Discount', discount) + '\n';
-receipt += moneyLine('VAT', data.tax) + '\n';
+
+// VAT Breakdown
+if (data.vatableSales !== undefined && data.vatableSales > 0) {
+  receipt += moneyLine('Vatable Sales', data.vatableSales) + '\n';
+}
+if (data.vatExemptSales !== undefined && data.vatExemptSales > 0) {
+  receipt += moneyLine('VAT Exempt Sales', data.vatExemptSales) + '\n';
+}
+if (data.vatAmount12Pct !== undefined && data.vatAmount12Pct > 0) {
+  receipt += moneyLine('VAT (12%)', data.vatAmount12Pct) + '\n';
+}
+
+// Discount Breakdown
+if (data.seniorDiscountAmount !== undefined && data.seniorDiscountAmount > 0) {
+  receipt += moneyLine('Senior Discount', data.seniorDiscountAmount) + '\n';
+}
+if (data.pwdDiscountAmount !== undefined && data.pwdDiscountAmount > 0) {
+  receipt += moneyLine('PWD Discount', data.pwdDiscountAmount) + '\n';
+}
+if (data.athleteDiscountAmount !== undefined && data.athleteDiscountAmount > 0) {
+  receipt += moneyLine('Athlete Discount', data.athleteDiscountAmount) + '\n';
+}
+if (data.regularDiscountAmount !== undefined && data.regularDiscountAmount > 0) {
+  receipt += moneyLine('Regular Discount', data.regularDiscountAmount) + '\n';
+}
+
+// Summary
+if (data.grossSales !== undefined) {
+  receipt += '------------------------------------------------\n';
+  receipt += moneyLine('Gross Sales', data.grossSales) + '\n';
+}
+if (data.netSales !== undefined) {
+  receipt += moneyLine('Net Sales', data.netSales) + '\n';
+}
+
 receipt += '------------------------------------------------\n';
 receipt += moneyLine('TOTAL', data.total) + '\n\n';
 

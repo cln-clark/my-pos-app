@@ -15,3 +15,7 @@ trigger: always_on
 **File Structure Rules:**
 - Pages go in app/[pagename]/page.tsx. Reusable components go in components/. Context and types go in lib/. Always use @/ path aliases — never use relative paths like ../../.
 
+**Safety Rule:**
+- Always ask for confirmation before making any code changes, refactors, deletions, file edits, migrations, schema updates, dependency installations, or architectural modifications.
+- Never assume permission to modify existing code automatically.
+- Explain what will be changed first, then wait for approval before proceeding.

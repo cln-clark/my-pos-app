@@ -15,6 +15,8 @@ export interface Product {
   name: string;
   price: number;
   categoryId?: number;
+  category?: string;
+  categoryCode?: string;
   stock: number;
   description?: string;
 }
@@ -34,6 +36,28 @@ export interface Role {
 export interface CartItem {
   product: Product;
   quantity: number;
+  discountQty: number; // Number of portions eligible for discount
+  discountCodeId?: number; // Per-item discount code
+}
+
+// Transaction Item with VAT Breakdown
+export interface TransactionItem {
+  product: Product;
+  quantity: number;
+  discountQty: number;
+  discountCodeId?: number;
+  // VAT breakdown fields
+  vatableAmt: number;
+  vatAmount12Pct: number;
+  lessVat12Pct: number;
+  vatExemptAmt: number;
+  discountAmount: number;
+  chargeAmount: number;
+  totalPortionQty: number;
+  discountPortionQty: number;
+  srAndOthersDiscPercent: number;
+  discountCode: number;
+  discountDescription: string;
 }
 
 // Transactions and Sales
@@ -45,7 +69,7 @@ export interface Transaction {
   cashierUserCode: string;
   cashierName: string;
   timestamp: Date;
-  items: CartItem[];
+  items: TransactionItem[];
   subtotal: number;
   tax: number;
   total: number;
@@ -55,6 +79,18 @@ export interface Transaction {
   businessDate?: string;
   terminalId?: number;
   cashAmountPaid?: number;
+  discountCodeId?: number;
   encodedByUserCode?: string;
   printedByUserCode?: string;
+  // VAT summary fields
+  vatableSales: number;
+  vatExemptSales: number;
+  zeroRatedSales: number;
+  vatAmount12Pct: number;
+  seniorDiscountAmount: number;
+  pwdDiscountAmount: number;
+  athleteDiscountAmount: number;
+  regularDiscountAmount: number;
+  grossSales: number;
+  netSales: number;
 }

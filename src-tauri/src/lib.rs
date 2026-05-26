@@ -21,6 +21,7 @@ pub fn run() {
       commands::login_user,
       commands::get_products,
       commands::get_categories,
+      commands::get_discount_codes,
       commands::create_transaction
     ])
     .setup(|app| {

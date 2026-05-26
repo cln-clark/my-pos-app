@@ -8,9 +8,16 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
             .create_table(
-                Table::create() 
+                Table::create()
                     .table(TxnDtl::Table)
                     .if_not_exists()
+                    .col(
+                        ColumnDef::new(TxnDtl::Id)
+                            .integer()
+                            .not_null()
+                            .auto_increment()
+                            .primary_key(),
+                    )
                     .col(
                         ColumnDef::new(TxnDtl::CompanyCode)
                             .integer()
@@ -30,14 +37,6 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(TxnDtl::TransactionNo)
                             .integer()
                             .not_null(),
-                    )
-                    .primary_key(
-                        Index::create()
-                            .primary()
-                            .col(TxnDtl::CompanyCode)
-                            .col(TxnDtl::StoreCode)
-                            .col(TxnDtl::TerminalId)
-                            .col(TxnDtl::TransactionNo),
                     )
                     .col(
                         ColumnDef::new(TxnDtl::BusinessDate)
@@ -60,46 +59,67 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(
+                        ColumnDef::new(TxnDtl::Sku)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::ProductName)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::LineSequence)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
                         ColumnDef::new(TxnDtl::Qty)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::Price)
+                        ColumnDef::new(TxnDtl::UnitPriceInclTax)
                             .double()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::Subtotal)
-                            .double()
+                        ColumnDef::new(TxnDtl::TxnModeCode)
+                            .integer()
                             .not_null(),
                     )
-                    .foreign_key(
-                        ForeignKey::create()
-                            .name("fk-txn_dtl-company_code")
-                            .from(TxnDtl::Table, TxnDtl::CompanyCode) // child
-                            .to(CompanyCode::Table, CompanyCode::CompanyCode) // parent
-                            .on_delete(ForeignKeyAction::Restrict),
+                    .col(
+                        ColumnDef::new(TxnDtl::OrderedDate)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::OrderedTime)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::DiscountCodeId)
+                            .integer()
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::DiscountQty)
+                            .integer()
+                            .not_null()
+                            .default(0),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name("fk-txn_dtl-store_code")
-                            .from(TxnDtl::Table, TxnDtl::StoreCode) // child
-                            .to(StoreCode::Table, StoreCode::StoreCode) // parent
-                            .on_delete(ForeignKeyAction::Restrict),
-                    )
-                    .foreign_key(
-                        ForeignKey::create()
-                            .name("fk-txn_dtl-terminal_id")
-                            .from(TxnDtl::Table, TxnDtl::TerminalId) // child
-                            .to(TxnHead::Table, TxnHead::TerminalId) // parent
-                            .on_delete(ForeignKeyAction::Restrict),
-                    )
-                    .foreign_key(
-                        ForeignKey::create()
-                            .name("fk-txn_dtl-transaction_no")
-                            .from(TxnDtl::Table, TxnDtl::TransactionNo) // child
-                            .to(TxnHead::Table, TxnHead::TransactionNo) // parent
+                            .name("fk-txn_dtl-txn_head")
+                            .from(TxnDtl::Table, TxnDtl::CompanyCode)
+                            .to(TxnHead::Table, TxnHead::CompanyCode)
+                            .from_col(TxnDtl::StoreCode)
+                            .to_col(TxnHead::StoreCode)
+                            .from_col(TxnDtl::TerminalId)
+                            .to_col(TxnHead::TerminalId)
+                            .from_col(TxnDtl::TransactionNo)
+                            .to_col(TxnHead::TransactionNo)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
@@ -124,15 +144,23 @@ impl MigrationTrait for Migration {
 #[derive(DeriveIden)]
 enum TxnDtl {
     Table,
+    Id,
     CompanyCode,
     StoreCode,
     TerminalId,
     TransactionNo,
     InvoiceNo,
     ProductId,
+    Sku,
+    ProductName,
+    LineSequence,
     Qty,
-    Price,
-    Subtotal,
+    UnitPriceInclTax,
+    TxnModeCode,
+    OrderedDate,
+    OrderedTime,
+    DiscountCodeId,
+    DiscountQty,
     BusinessDate,
     CategoryCode,
 }
@@ -163,3 +191,4 @@ enum Products {
     Table,
     Id,
 }
+    

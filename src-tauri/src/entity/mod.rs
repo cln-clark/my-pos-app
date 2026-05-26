@@ -8,4 +8,5 @@ pub mod company_code;
 pub mod store_code;
 pub mod txn_mode;
 pub mod category;
+pub mod discount_code;
 

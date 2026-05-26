@@ -15,18 +15,18 @@ export function TxnModeSelector({ selectedMode, onModeChange }: TxnModeSelectorP
             <Button
                 type="button"
                 variant={selectedMode === 'dine-in' ? 'default' : 'outline'}
-                size="sm"
+                size="default"
                 onClick={() => onModeChange('dine-in')}
-                className="flex-1"
+                className="flex-1 h-10 text-sm font-medium active:scale-95 transition-transform"
             >
                 Dine In
             </Button>
             <Button
                 type="button"
                 variant={selectedMode === 'takeout' ? 'default' : 'outline'}
-                size="sm"
+                size="default"
                 onClick={() => onModeChange('takeout')}
-                className="flex-1"
+                className="flex-1 h-10 text-sm font-medium active:scale-95 transition-transform"
             >
                 Takeout
             </Button>
