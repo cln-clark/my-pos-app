@@ -143,6 +143,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "log",
+ "rust_decimal",
  "sea-orm",
  "sea-orm-migration",
  "serde",

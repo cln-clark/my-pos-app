@@ -86,7 +86,7 @@ export function PaymentScreen({ total, items, onPaymentComplete, onCancel }: Pay
                             onMethodChange={setPaymentMethod}
                         />
 
-                        {/* Cash Payment Input */}
+                        {/* Cash Payment Input and Summary */}
                         {paymentMethod === 'cash' && (
                             <Card>
                                 <CardHeader className="space-y-1 pb-3">
@@ -114,32 +114,38 @@ export function PaymentScreen({ total, items, onPaymentComplete, onCancel }: Pay
                                         </Button>
                                     </div>
                                     {amountTendered && (
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground font-medium">Change:</span>
-                                            <span className={`font-semibold text-base ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                ₱{change.toFixed(2)}
-                                            </span>
+                                        <div className="space-y-2 pt-2">
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground font-medium">Tendered:</span>
+                                                <span>₱{parsedAmount.toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground font-medium">Change:</span>
+                                                <span className={`font-semibold text-base ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                    ₱{change.toFixed(2)}
+                                                </span>
+                                            </div>
                                         </div>
                                     )}
+                                    <div className="flex justify-between font-bold text-base pt-2">
+                                        <span>Total:</span>
+                                        <span className="text-blue-600">₱{total.toFixed(2)}</span>
+                                    </div>
                                 </CardContent>
                             </Card>
                         )}
 
-                        {/* Total Summary */}
-                        <Card>
-                            <CardContent className="p-3 space-y-2">
-                                {paymentMethod === 'cash' && amountTendered && (
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground font-medium">Tendered:</span>
-                                        <span>₱{parsedAmount.toFixed(2)}</span>
+                        {/* Card Payment Summary */}
+                        {paymentMethod === 'card' && (
+                            <Card>
+                                <CardContent className="p-3">
+                                    <div className="flex justify-between font-bold text-base">
+                                        <span>Total:</span>
+                                        <span className="text-blue-600">₱{total.toFixed(2)}</span>
                                     </div>
-                                )}
-                                <div className="flex justify-between font-bold text-base pt-2 border-t">
-                                    <span>Total:</span>
-                                    <span className="text-blue-600">₱{total.toFixed(2)}</span>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                </CardContent>
+                            </Card>
+                        )}
 
                         {/* Action Buttons */}
                         <div className="flex gap-2 shrink-0">

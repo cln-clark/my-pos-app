@@ -38,6 +38,9 @@ export interface CartItem {
   quantity: number;
   discountQty: number; // Number of portions eligible for discount
   discountCodeId?: number; // Per-item discount code
+  discountMode?: 'per-item' | 'portioning'; // Discount mode for SC/PWD
+  totalPortion?: number; // Total portion for portioning discount
+  regularPortionDiscount?: number; // Regular portion discount % for portioning
 }
 
 // Transaction Item with VAT Breakdown
@@ -46,18 +49,17 @@ export interface TransactionItem {
   quantity: number;
   discountQty: number;
   discountCodeId?: number;
-  // VAT breakdown fields
+  // BIR Computation Fields (simplified)
+  vatAmount: number;
   vatableAmt: number;
-  vatAmount12Pct: number;
-  lessVat12Pct: number;
   vatExemptAmt: number;
-  discountAmount: number;
-  chargeAmount: number;
-  totalPortionQty: number;
-  discountPortionQty: number;
-  srAndOthersDiscPercent: number;
-  discountCode: number;
-  discountDescription: string;
+  zeroRatedAmt: number;
+  lessVat: number;
+  isVatExempt: boolean;
+  isScpwdDiscount: boolean;
+  // Additional computed fields for display
+  discountAmount?: number;
+  discountDescription?: string;
 }
 
 // Transactions and Sales
@@ -93,4 +95,6 @@ export interface Transaction {
   regularDiscountAmount: number;
   grossSales: number;
   netSales: number;
+  lessVat: number;
+  serviceChargeAmount?: number;
 }

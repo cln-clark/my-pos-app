@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect  } f
 import { User, Product, CartItem, Transaction, Category, TransactionItem } from './types';
 import { getProducts, getCategories, getDiscountCodes, createTransaction as createTransactionData, loginUser as loginUserApi } from "./data";
 import { invoke } from '@tauri-apps/api/core';
+import { calculateItemVATBreakdown as calculateItemVAT, calculateSalesBreakdown, roundTo5Decimals } from './bir-computation';
 
 interface POSContextType {
     currentUser: User | null;
@@ -18,10 +19,15 @@ interface POSContextType {
     updateCartQuantity: (productId: string, quantity: number) =>  void;
     updateDiscountQty: (productId: string, discountQty: number) => void;
     setItemDiscountCode: (productId: string, discountCodeId: number | undefined) => void;
+    setItemPortioningDiscount: (productId: string, discountCodeId: number | undefined, discountMode: 'per-item' | 'portioning' | undefined, totalPortion: number, discountQty: number, regularPortionDiscount: number) => void;
+    setItemDiscountMode: (productId: string, discountMode: 'per-item' | 'portioning' | undefined) => void;
+    setItemTotalPortion: (productId: string, totalPortion: number) => void;
+    setItemRegularPortionDiscount: (productId: string, regularPortionDiscount: number) => void;
     removeFromCart: (productId: string) => void;
     getCartTotal: () => number;
     calculateDiscount: (cart: CartItem[]) => number;
     calculateItemVATBreakdown: (cartItem: CartItem) => TransactionItem;
+    calculateTransactionVATSummary: (cart: CartItem[]) => Omit<Transaction, 'id' | 'cashierUserCode' | 'cashierName' | 'timestamp' | 'paymentMethod' | 'change' | 'txnMode' | 'businessDate' | 'terminalId' | 'cashAmountPaid' | 'discountCodeId' | 'encodedByUserCode' | 'printedByUserCode' | 'items'>;
     clearCart: () => void;
 
     transactions: Transaction[];
@@ -73,7 +79,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
                             { ...item, quantity: item.quantity + quantity}
                             : item
             )};
-            return [ ...prev, { product, quantity, discountQty: 0, discountCodeId: undefined} ]
+            return [{ product, quantity, discountQty: 0, discountCodeId: undefined, discountMode: undefined, totalPortion: undefined, regularPortionDiscount: undefined }, ...prev]
         })
     }, []);
  
@@ -106,7 +112,39 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     const setItemDiscountCode = useCallback((productId: string, discountCodeId: number | undefined) => {
         setCart((prev) => prev.map((item) =>
             item.product.id === productId ?
-                { ...item, discountCodeId, discountQty: discountCodeId ? item.quantity : 0 }
+                { ...item, discountCodeId, discountQty: discountCodeId ? item.quantity : 0, discountMode: undefined, totalPortion: undefined, regularPortionDiscount: undefined }
+                : item
+        ))
+    }, [])
+
+    const setItemPortioningDiscount = useCallback((productId: string, discountCodeId: number | undefined, discountMode: 'per-item' | 'portioning' | undefined, totalPortion: number, discountQty: number, regularPortionDiscount: number) => {
+        setCart((prev) => prev.map((item) =>
+            item.product.id === productId ?
+                { ...item, discountCodeId, discountMode, totalPortion, discountQty, regularPortionDiscount }
+                : item
+        ))
+    }, [])
+
+    const setItemDiscountMode = useCallback((productId: string, discountMode: 'per-item' | 'portioning' | undefined) => {
+        setCart((prev) => prev.map((item) =>
+            item.product.id === productId ?
+                { ...item, discountMode }
+                : item
+        ))
+    }, [])
+
+    const setItemTotalPortion = useCallback((productId: string, totalPortion: number) => {
+        setCart((prev) => prev.map((item) =>
+            item.product.id === productId ?
+                { ...item, totalPortion }
+                : item
+        ))
+    }, [])
+
+    const setItemRegularPortionDiscount = useCallback((productId: string, regularPortionDiscount: number) => {
+        setCart((prev) => prev.map((item) =>
+            item.product.id === productId ?
+                { ...item, regularPortionDiscount }
                 : item
         ))
     }, [])
@@ -117,50 +155,31 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         const quantity = cartItem.quantity;
         const discountQty = cartItem.discountQty;
 
-        // Calculate eligible amount for discount
-        const eligibleAmount = itemPrice * discountQty;
-        const nonDiscountedAmount = itemPrice * (quantity - discountQty);
-
-        // Calculate discount amount
-        let discountAmount = 0;
-        let isVatExempt = false;
-
-        if (discount && discountQty > 0) {
-            if (discount.name === 'Senior Citizen' || discount.name === 'PWD' || discount.name === 'Athlete') {
-                // VAT-exempt discount: (Eligible Amount / 1.12) * 0.20
-                discountAmount = (eligibleAmount / 1.12) * 0.20;
-                isVatExempt = true;
-            } else {
-                // Regular discount: Eligible Amount * (Discount % / 100)
-                discountAmount = eligibleAmount * (discount.percent / 100);
-            }
-        }
-
-        // VAT calculations
-        const vatableAmt = isVatExempt ? nonDiscountedAmount : (itemPrice * quantity);
-        const vatAmount12Pct = vatableAmt * 0.12;
-        const lessVat12Pct = isVatExempt ? (eligibleAmount / 1.12) * 0.12 : 0;
-        const vatExemptAmt = isVatExempt ? (eligibleAmount / 1.12) : 0;
-
-        // Discount percentage
-        const srAndOthersDiscPercent = (discount && isVatExempt) ? 20 : (discount ? discount.percent : 0);
+        const vatBreakdown = calculateItemVAT({
+            itemPrice,
+            quantity,
+            discountQty,
+            discountName: discount?.name || null,
+            discountPercent: discount?.percent || null,
+            discountMode: cartItem.discountMode,
+            totalPortion: cartItem.totalPortion,
+            regularPortionDiscount: cartItem.regularPortionDiscount,
+        });
 
         return {
             product: cartItem.product,
             quantity: cartItem.quantity,
             discountQty: cartItem.discountQty,
             discountCodeId: cartItem.discountCodeId,
-            vatableAmt: Math.round(vatableAmt * 100000) / 100000,
-            vatAmount12Pct: Math.round(vatAmount12Pct * 100000) / 100000,
-            lessVat12Pct: Math.round(lessVat12Pct * 100000) / 100000,
-            vatExemptAmt: Math.round(vatExemptAmt * 100000) / 100000,
-            discountAmount: Math.round(discountAmount * 100000) / 100000,
-            chargeAmount: 0,
-            totalPortionQty: quantity,
-            discountPortionQty: discountQty,
-            srAndOthersDiscPercent: Math.round(srAndOthersDiscPercent * 100000) / 100000,
-            discountCode: cartItem.discountCodeId || 0,
-            discountDescription: discount?.name || 'No Discount',
+            vatAmount: vatBreakdown.vatAmount,
+            vatableAmt: vatBreakdown.vatableAmt,
+            vatExemptAmt: vatBreakdown.vatExemptAmt,
+            zeroRatedAmt: vatBreakdown.zeroRatedAmt,
+            lessVat: vatBreakdown.lessVat,
+            isVatExempt: vatBreakdown.isVatExempt,
+            isScpwdDiscount: vatBreakdown.isScpwdDiscount,
+            discountAmount: vatBreakdown.discountAmount,
+            discountDescription: vatBreakdown.discountDescription,
         };
     }, [discountCodes])
 
@@ -171,26 +190,79 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     const calculateDiscount = useCallback((cart: CartItem[]) => {
         let totalDiscount = 0;
         for (const item of cart) {
-            if (item.discountCodeId && item.discountQty > 0) {
-                const discount = discountCodes.find(d => d.id === item.discountCodeId);
-                if (!discount) continue;
-
-                const itemPrice = item.product.price;
-                const eligibleAmount = itemPrice * item.discountQty;
-
-                // Senior/PWD/Athlete discount: (Eligible Amount / 1.12) * 0.20
-                if (discount.name === 'Senior Citizen' || discount.name === 'PWD' || discount.name === 'Athlete') {
-                    totalDiscount += (eligibleAmount / 1.12) * 0.20;
-                }
-                // Regular discount: Eligible Amount * (Discount % / 100)
-                else {
-                    totalDiscount += eligibleAmount * (discount.percent / 100);
-                }
+            const vatBreakdown = calculateItemVATBreakdown(item);
+            // For SC/PWD discounts, include Less VAT in the total discount
+            // Total Due = ItemPrice - Senior Discount - Less VAT
+            if (vatBreakdown.isScpwdDiscount) {
+                totalDiscount += (vatBreakdown.discountAmount || 0) + (vatBreakdown.lessVat || 0);
+            } else {
+                totalDiscount += vatBreakdown.discountAmount || 0;
             }
         }
-
         return totalDiscount;
-    }, [discountCodes])
+    }, [discountCodes, calculateItemVATBreakdown])
+
+    const calculateTransactionVATSummary = useCallback((cart: CartItem[]) => {
+        let seniorDiscount = 0;
+        let pwdDiscount = 0;
+        let athleteDiscount = 0;
+        let regularDiscount = 0;
+        let vatExemptSales = 0;
+        let vatableSales = 0;
+        let vatAmount = 0;
+
+        for (const item of cart) {
+            const vatBreakdown = calculateItemVATBreakdown(item);
+            const discount = item.discountCodeId ? discountCodes.find(d => d.id === item.discountCodeId) : null;
+
+            if (discount) {
+                if (discount.name === 'Senior Citizen') {
+                    seniorDiscount += vatBreakdown.discountAmount || 0;
+                } else if (discount.name === 'PWD') {
+                    pwdDiscount += vatBreakdown.discountAmount || 0;
+                } else if (discount.name === 'Athlete') {
+                    athleteDiscount += vatBreakdown.discountAmount || 0;
+                } else {
+                    regularDiscount += vatBreakdown.discountAmount || 0;
+                }
+            }
+
+            vatExemptSales += vatBreakdown.vatExemptAmt;
+            vatableSales += vatBreakdown.vatableAmt;
+            vatAmount += vatBreakdown.vatAmount;
+        }
+
+        const totalSales = getCartTotal();
+        const totalDiscount = seniorDiscount + pwdDiscount + athleteDiscount + regularDiscount;
+        const lessVat = (seniorDiscount + pwdDiscount) * 0.12;
+
+        const salesBreakdown = calculateSalesBreakdown(
+            totalSales,
+            seniorDiscount,
+            pwdDiscount,
+            athleteDiscount,
+            regularDiscount,
+            vatExemptSales,
+            0 // zeroRatedSales
+        );
+
+        return {
+            subtotal: totalSales,
+            tax: vatAmount,
+            total: totalSales - totalDiscount,
+            vatableSales: salesBreakdown.vatableSales,
+            vatExemptSales: salesBreakdown.vatExemptSales,
+            zeroRatedSales: salesBreakdown.zeroRatedSales,
+            vatAmount12Pct: salesBreakdown.vatAmount,
+            seniorDiscountAmount: seniorDiscount,
+            pwdDiscountAmount: pwdDiscount,
+            athleteDiscountAmount: athleteDiscount,
+            regularDiscountAmount: regularDiscount,
+            grossSales: salesBreakdown.grossSales,
+            netSales: salesBreakdown.netSales,
+            lessVat: salesBreakdown.lessVat,
+        };
+    }, [discountCodes, calculateItemVATBreakdown, getCartTotal])
 
     const clearCart = useCallback(() => {
         setCart([]);
@@ -200,16 +272,21 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         async (transaction: Omit<Transaction, 'id'>) => {
             const companyCode = 1;
             const storeCode = 1;
-            const terminalId = 3;
+            const terminalId = 1;
             const encodedByUserCode = transaction.cashierUserCode;
             const printedByUserCode = transaction.cashierUserCode;
             const cashAmountPaid = transaction.paymentMethod === 'cash' ? (transaction.total + (transaction.change || 0)) : null;
         try {
+            // Fetch discount codes if not available
+            const codes = discountCodes.length > 0 ? discountCodes : await getDiscountCodes();
+
             // Map txn_mode to code: dine-in = 1, takeout = 2
             const txn_mode_code = transaction.txnMode === 'takeout' ? 2 : 1;
 
             const items = transaction.items.map((item: any, index: number) => {
                 const now = new Date();
+                const discountCodeId = item.discountCodeId ? (typeof item.discountCodeId === 'string' ? parseInt(item.discountCodeId) : item.discountCodeId) : 4;
+                const discount = codes.find(d => d.id === discountCodeId);
                 return {
                     company_code: companyCode,
                     store_code: storeCode,
@@ -220,25 +297,28 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
                     line_sequence: index + 1,
                     qty: item.quantity,
                     unit_price_incl_tax: item.product.price,
+                    discount_percent: discount?.percent || 0,
+                    price_before_disc: item.product.price,
+                    invoice_no: 0, // Will be set by backend
                     txn_mode_code: txn_mode_code,
+                    is_vat_exempt: item.isVatExempt || false,
+                    price_before_less_vat: item.product.price,
+                    is_scpwd_disc: item.isScpwdDiscount || false,
                     ordered_date: now.toLocaleDateString(),
                     ordered_time: now.toLocaleTimeString(),
-                    discount_code_id: transaction.discountCodeId || null,
-                    discount_qty: item.discountQty || 0,
+                    disc_code_id: discountCodeId,
+                    disc_description: discount?.name || 'Regular',
+                    vatable_amt: item.vatableAmt || 0,
+                    vat_amt: item.vatAmount || 0,
+                    less_vat: item.lessVat || 0,
+                    vat_exempt_amt: item.vatExemptAmt || 0,
+                    zero_rated_amt: item.zeroRatedAmt || 0,
+                    disc_amt: item.discountAmount || 0,
+                    charge_amt: 0,
+                    total_portion_qty: item.totalPortion || 0,
+                    disc_portion_qty: item.discountQty || 0,
                     business_date: transaction.timestamp.toLocaleDateString(),
                     category_code: item.product.categoryCode || 'UNC',
-                    // VAT breakdown fields
-                    SrAndOthersDiscPercent: item.srAndOthersDiscPercent || 0,
-                    DiscountCode: item.discountCode || 0,
-                    DiscountDescription: item.discountDescription || '',
-                    VATableAmt: item.vatableAmt || 0,
-                    VATAmount_12Pct: item.vatAmount12Pct || 0,
-                    LessVAT_12Pct: item.lessVat12Pct || 0,
-                    VATExemptAmt: item.vatExemptAmt || 0,
-                    DiscountAmount: item.discountAmount || 0,
-                    ChargeAmount: item.chargeAmount || 0,
-                    TotalPortionQty: item.totalPortionQty || 0,
-                    DiscountPortionQty: item.discountPortionQty || 0,
                 };
             });
 
@@ -296,9 +376,14 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         updateCartQuantity,
         updateDiscountQty,
         setItemDiscountCode,
+        setItemPortioningDiscount,
+        setItemDiscountMode,
+        setItemTotalPortion,
+        setItemRegularPortionDiscount,
         getCartTotal,
         calculateDiscount,
         calculateItemVATBreakdown,
+        calculateTransactionVATSummary,
         clearCart,
         transactions,
         createTransaction

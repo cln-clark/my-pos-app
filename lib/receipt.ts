@@ -24,6 +24,7 @@ export interface ReceiptData {
   vatableSales?: number;
   vatExemptSales?: number;
   vatAmount12Pct?: number;
+  lessVat?: number;
   seniorDiscountAmount?: number;
   pwdDiscountAmount?: number;
   athleteDiscountAmount?: number;
@@ -103,6 +104,9 @@ if (data.vatableSales !== undefined && data.vatableSales > 0) {
 if (data.vatExemptSales !== undefined && data.vatExemptSales > 0) {
   receipt += moneyLine('VAT Exempt Sales', data.vatExemptSales) + '\n';
 }
+if (data.lessVat !== undefined && data.lessVat > 0) {
+  receipt += moneyLine('Less VAT', data.lessVat) + '\n';
+}
 if (data.vatAmount12Pct !== undefined && data.vatAmount12Pct > 0) {
   receipt += moneyLine('VAT (12%)', data.vatAmount12Pct) + '\n';
 }
@@ -118,7 +122,7 @@ if (data.athleteDiscountAmount !== undefined && data.athleteDiscountAmount > 0) 
   receipt += moneyLine('Athlete Discount', data.athleteDiscountAmount) + '\n';
 }
 if (data.regularDiscountAmount !== undefined && data.regularDiscountAmount > 0) {
-  receipt += moneyLine('Regular Discount', data.regularDiscountAmount) + '\n';
+  receipt += moneyLine('Regular', data.regularDiscountAmount) + '\n';
 }
 
 // Summary
@@ -146,7 +150,6 @@ if (data.paymentMethod === 'cash') {
 
   receipt += '================================================\n';
   receipt += `Items Sold : ${itemsSold}\n`;
-  receipt += `Guest Count: ${guestCount}\n`;
   receipt += '================================================\n\n';
 
   receipt += 'THIS SERVES AS YOUR OFFICIAL RECEIPT\n\n';

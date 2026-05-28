@@ -49,27 +49,7 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::InvoiceNo)
-                            .integer()
-                            .not_null(),
-                    )
-                    .col(
                         ColumnDef::new(TxnDtl::ProductId)
-                            .integer()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(TxnDtl::Sku)
-                            .string()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(TxnDtl::ProductName)
-                            .string()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(TxnDtl::LineSequence)
                             .integer()
                             .not_null(),
                     )
@@ -79,14 +59,64 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(
+                        ColumnDef::new(TxnDtl::ProductName)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::Sku)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
                         ColumnDef::new(TxnDtl::UnitPriceInclTax)
                             .double()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::DiscountPercent)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::PriceBeforeDisc)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::InvoiceNo)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::LineSequence)
+                            .integer()
                             .not_null(),
                     )
                     .col(
                         ColumnDef::new(TxnDtl::TxnModeCode)
                             .integer()
                             .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::IsVatExempt)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::PriceBeforeLessVat)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::IsScpwdDisc)
+                            .boolean()
+                            .not_null()
+                            .default(false),
                     )
                     .col(
                         ColumnDef::new(TxnDtl::OrderedDate)
@@ -99,12 +129,65 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::DiscountCodeId)
+                        ColumnDef::new(TxnDtl::DiscCodeId)
                             .integer()
                             .null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::DiscountQty)
+                        ColumnDef::new(TxnDtl::DiscDescription)
+                            .string()
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::VatableAmt)
+                            .double()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::VatAmt)
+                            .double()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::LessVat)
+                            .double()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::VatExemptAmt)
+                            .double()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::ZeroRatedAmt)
+                            .double()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::DiscAmt)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::ChargeAmt)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::TotalPortionQty)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(TxnDtl::DiscPortionQty)
                             .integer()
                             .not_null()
                             .default(0),
@@ -149,20 +232,34 @@ enum TxnDtl {
     StoreCode,
     TerminalId,
     TransactionNo,
-    InvoiceNo,
-    ProductId,
-    Sku,
-    ProductName,
-    LineSequence,
-    Qty,
-    UnitPriceInclTax,
-    TxnModeCode,
-    OrderedDate,
-    OrderedTime,
-    DiscountCodeId,
-    DiscountQty,
     BusinessDate,
     CategoryCode,
+    ProductId,
+    Qty,
+    ProductName,
+    Sku,
+    UnitPriceInclTax,
+    DiscountPercent,
+    PriceBeforeDisc,
+    InvoiceNo,
+    LineSequence,
+    TxnModeCode,
+    IsVatExempt,
+    PriceBeforeLessVat,
+    IsScpwdDisc,
+    OrderedDate,
+    OrderedTime,
+    DiscCodeId,
+    DiscDescription,
+    VatableAmt,
+    VatAmt,
+    LessVat,
+    VatExemptAmt,
+    ZeroRatedAmt,
+    DiscAmt,
+    ChargeAmt,
+    TotalPortionQty,
+    DiscPortionQty,
 }
 
 #[derive(DeriveIden)]

@@ -4,7 +4,7 @@ import { usePOS } from "@/lib/context";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
 
@@ -12,10 +12,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const inactivityTimer = useRef<NodeJS.Timeout | null>(null);
     const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-
-    if (!currentUser) {
-        return <>{children}</>;
-    }
+    const [currentTime, setCurrentTime] = useState(new Date());
 
     const handleLogout = () => {
         logout();
@@ -53,22 +50,43 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         };
     }, []);
 
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+        }, 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    if (!currentUser) {
+        return <>{children}</>;
+    }
+
     return (
         <div className="flex flex-col h-screen bg-gray-50">
             {/* Kiosk Header */}
             <header className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
                 <div>
-                    <h1 className="text-2xl font-bold">POS Kiosk</h1>
-                    <p className="text-sm text-slate-400">Cashier: {currentUser.name}</p>
+                    <h1 className="text-2xl font-bold">POS</h1>
+                    <p className="text-sm text-slate-400">Cashier: {currentUser.name} | Terminal No. 1</p>
                 </div>
-                <Button
-                    variant="outline"
-                    onClick={handleLogout}
-                    className="h-12 px-6 text-black font-bold border-slate-600 hover:text-white hover:bg-slate-800 active:scale-95 transition-transform"
-                >
-                    <LogOut className="h-5 w-5 mr-2" />
-                    <span className="text-base">Logout</span>
-                </Button>
+                <div className="flex items-center gap-6">
+                    <div className="text-right">
+                        <div className="text-sm text-slate-300">
+                            {currentTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                        </div>
+                        <div className="text-lg font-mono font-semibold">
+                            {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </div>
+                    </div>
+                    <Button
+                        variant="outline"
+                        onClick={handleLogout}
+                        className="h-12 px-6 text-black font-bold border-slate-600 hover:text-white hover:bg-slate-800 active:scale-95 transition-transform"
+                    >
+                        <LogOut className="h-5 w-5 mr-2" />
+                        <span className="text-base">Logout</span>
+                    </Button>
+                </div>
             </header>
             <main className="flex-1 h-full p-6 overflow-auto">
                 {children}

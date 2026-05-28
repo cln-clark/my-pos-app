@@ -38,7 +38,7 @@ impl MigrationTrait for Migration {
                             ('Senior Citizen', 20),
                             ('PWD', 20),
                             ('Athlete', 20),
-                            ('Regular Discount', 0);
+                            ('Regular', 0);
                             ").await?;
                             
         Ok(())
