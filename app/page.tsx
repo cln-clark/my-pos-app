@@ -7,32 +7,24 @@
     import { Alert, AlertAction,AlertDescription, AlertTitle } from "@/components/ui/alert"
     import { Input } from '@/components/ui/input';
     import { Button } from '@/components/ui/button';
-    import {
-      Select,
-      SelectContent,
-      SelectGroup,
-      SelectItem,
-      SelectLabel,
-      SelectTrigger,
-      SelectValue,
-    } from "@/components/ui/select"
-    import { getUsers } from '@/lib/data';
     import { AlertCircle } from 'lucide-react';
-    import { User } from '@/lib/types';
     import { Numpad } from '@/components/ui/numpad';
 
     export default function LoginPage() {
       
       const router = useRouter();
       const [error, setError] = useState<string>('');
-      const [selectedUser, setSelectedUser] = useState<string>('');
+      const [userId, setUserId] = useState<string>('');
       const [pin, setPin] = useState<string>('');
       const {login} = usePOS();
       const [loading, setLoading] = useState<boolean>(false);
-      const [users, setUsers] = useState<User[]>([]);
- 
+      const [currentTime, setCurrentTime] = useState<Date>(new Date());
+
       useEffect(() => {
-        getUsers().then(setUsers);
+        const timer = setInterval(() => {
+          setCurrentTime(new Date());
+        }, 1000);
+        return () => clearInterval(timer);
       }, []);
 
       const handleLogin = async (e: React.FormEvent) => {
@@ -40,18 +32,18 @@
         setError('');
         setLoading(true);
 
-        if(!selectedUser || !pin) {
-          setError('Please select username and enter PIN');
+        if(!userId || !pin) {
+          setError('Please enter User ID and PIN');
           setLoading(false);
           return;
         }
 
-        const success = await login(parseInt(selectedUser), pin);
+        const success = await login(parseInt(userId), pin);
 
         if(success) {
           router.push('/cashier');
         } else {
-          setError('Invalid PIN. Please try again.');
+          setError('Invalid User ID or PIN. Please try again.');
         }
 
         setLoading(false);
@@ -64,22 +56,41 @@
         }
       };
 
+      const handleUserIdPadClick = (value: string) => {
+        if (userId.length < 10) {
+          setUserId(userId + value);
+        }
+      };
+
       const handlePinPadClear = () => {
         setPin('');
+      };
+
+      const handleUserIdPadClear = () => {
+        setUserId('');
       };
 
       const handlePinPadBackspace = () => {
         setPin(pin.slice(0, -1));
       };
 
+      const handleUserIdPadBackspace = () => {
+        setUserId(userId.slice(0, -1));
+      };
+
 
     return (
-      <div className="flex min-h-screen w-full items-center justify-center p-4 md:p-10 bg-muted/40">
+      <div className="flex min-h-screen w-full items-center justify-center p-4 md:p-10 bg-muted/40 relative">
+        <div className="absolute top-4 left-4 text-sm text-muted-foreground" suppressHydrationWarning>
+          {currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          <br />
+          {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+        </div>
         <div className="flex w-full max-w-6xl flex-col lg:flex-row gap-6">
           {/* Login Form - Left Side */}
           <Card className="flex-1">
             <CardHeader className="space-y-2 pb-6">
-              <CardTitle className="text-4xl font-bold">POS</CardTitle>
+              <CardTitle className="text-4xl font-bold">FASTPOS</CardTitle>
               <CardDescription className="text-base">Point of Sale System</CardDescription>
             </CardHeader>
             <CardContent>
@@ -92,27 +103,15 @@
                 )}
 
                 <div className='space-y-3'>
-                  <label htmlFor="user" className='text-base font-semibold'>Select Cashier</label>
-                  <Select value={selectedUser} onValueChange={setSelectedUser}>
-                    <SelectTrigger className="flex mt-2 h-12 w-full items-center justify-between rounded-lg border border-input bg-background px-4 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                      <SelectValue placeholder="Select Cashier" />
-                    </SelectTrigger>
-                    <SelectContent className="w-full">
-                      <SelectGroup>
-                        <SelectLabel className="text-base">Select Cashier</SelectLabel>
-                        { users.filter((user) => user.role.id === 1 || user.role.id === 2)
-                                .map((user) => (
-                                <SelectItem key={user.id}
-                                            value={user.id.toString()}
-                                            className="w-full cursor-pointer py-3 text-base">
-                                  {user.name}
-                                </SelectItem>
-                        ))}
-                      </SelectGroup>
-
-                    </SelectContent>
-                  </Select>
-
+                  <label htmlFor="userId" className='text-base font-semibold'>User ID</label>
+                  <Input id="userId"
+                        type="text"
+                        placeholder='Enter User ID'
+                        value={userId}
+                        onChange={(e) => setUserId(e.target.value)}
+                        maxLength={10}
+                        className="mt-2 h-14 text-lg text-center [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
+                  />
                 </div>
 
                 <div className='space-y-3'>
@@ -140,7 +139,7 @@
             onDigitClick={handlePinPadClick}
             onClear={handlePinPadClear}
             onBackspace={handlePinPadBackspace}
-            disabled={!selectedUser}
+            disabled={!userId}
           />
         </div>
       </div>

@@ -69,9 +69,18 @@
   export async function createTransaction(transactionData: any) {
     try {
       const result = await invoke('create_transaction', { transactionData });
-      return result as Transaction;
+      return result as any;
     } catch (error) {
       console.error('Error creating transaction:', error);
+      throw error;
+    }
+  }
+
+  export async function createPosZxReading(zxReadingData: any) {
+    try {
+      await invoke('create_pos_zx_reading', { data: zxReadingData });
+    } catch (error) {
+      console.error('Error creating POS ZX reading:', error);
       throw error;
     }
   }

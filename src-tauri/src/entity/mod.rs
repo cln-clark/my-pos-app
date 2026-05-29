@@ -9,4 +9,5 @@ pub mod store_code;
 pub mod txn_mode;
 pub mod category;
 pub mod discount_code;
+pub mod pos_zx_reading;
 

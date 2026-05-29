@@ -5,14 +5,19 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Toaster } from "@/components/ui/sonner";
+import { ManagerAuthModal } from "@/components/pos/manager-auth-modal";
+import { toast } from "sonner";
+import { invoke } from '@tauri-apps/api/core';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
 
-    const { currentUser, logout } = usePOS();
+    const { currentUser, logout, setManagerAuth } = usePOS();
     const router = useRouter();
     const inactivityTimer = useRef<NodeJS.Timeout | null>(null);
     const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [managerAuthOpen, setManagerAuthOpen] = useState(false);
 
     const handleLogout = () => {
         logout();
@@ -80,6 +85,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </div>
                     <Button
                         variant="outline"
+                        onClick={() => setManagerAuthOpen(true)}
+                        className="h-12 px-6 text-black font-bold border-slate-600 hover:text-white hover:bg-slate-800 active:scale-95 transition-transform"
+                    >
+                        <span className="text-base">Manager/Supervisor Override</span>
+                    </Button>
+                    <Button
+                        variant="outline"
                         onClick={handleLogout}
                         className="h-12 px-6 text-black font-bold border-slate-600 hover:text-white hover:bg-slate-800 active:scale-95 transition-transform"
                     >
@@ -91,6 +103,40 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <main className="flex-1 h-full p-6 overflow-auto">
                 {children}
             </main>
+            <Toaster />
+            <ManagerAuthModal
+                open={managerAuthOpen}
+                onOpenChange={setManagerAuthOpen}
+                onAuthSuccess={async (managerPin) => {
+                    try {
+                        // Authenticate manager - assuming manager user ID is 2
+                        // You may need to adjust this based on your actual manager user ID
+                        const user = await invoke<any>('login_user', {
+                            cashierUserCode: 2, // Manager user ID
+                            pin: managerPin,
+                        });
+
+                        // Verify it's actually a manager (role_id = 2)
+                        if (user.role_id !== 2) {
+                            toast.error('User is not a manager');
+                            return;
+                        }
+
+                        setManagerAuth({
+                            id: user.id.toString(),
+                            name: user.name,
+                            email: user.email,
+                            role: { id: user.role_id, name: 'Manager' },
+                            pin: user.pin,
+                        });
+
+                        toast.success('Manager authenticated');
+                        router.push('/manager/transaction-history');
+                    } catch (error) {
+                        toast.error('Manager authentication failed: ' + error);
+                    }
+                }}
+            />
         </div>
     );
 

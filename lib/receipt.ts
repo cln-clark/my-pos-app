@@ -19,7 +19,6 @@ export interface ReceiptData {
   orNo?: string;
   discount?: number;
   itemsSold?: number;
-  guestCount?: number;
   // VAT breakdown
   vatableSales?: number;
   vatExemptSales?: number;
@@ -33,6 +32,17 @@ export interface ReceiptData {
   netSales?: number;
 }
 
+export interface VoidReceiptData {
+  originalTransactionNo: string;
+  voidTransactionNo: string;
+  timestamp: Date;
+  voidedBy: string;
+  voidReason: string;
+  originalTotal: number;
+  originalPaymentMethod: 'cash' | 'card';
+  originalInvoiceNo: string;
+}
+
 export function generateReceiptText(data: ReceiptData): string {
   const year = data.timestamp.getFullYear();
   const txnNo = data.transactionNo || `TXN-${year}-${String(data.invoiceNo).padStart(6, '0')}`;
@@ -42,15 +52,14 @@ export function generateReceiptText(data: ReceiptData): string {
   const timeStr = data.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const discount = data.discount || 0;
   const itemsSold = data.itemsSold || data.items.reduce((sum, item) => sum + item.quantity, 0);
-  const guestCount = data.guestCount || 1;
 
   let receipt = '';
 
   // Top border
   receipt += '================================================\n';
 
-  // Company Header
-  receipt += '                 RETAILPOS\n';
+  // Company Header 
+  receipt += '                 FASTPOS\n';
   receipt += '          Point of Sale System\n';
   receipt += '        Quiapo, Manila, Philippines\n';
   receipt += '================================================\n\n';
@@ -74,8 +83,8 @@ export function generateReceiptText(data: ReceiptData): string {
   // Items
   data.items.forEach((item) => {
     const name = item.productName.padEnd(20);      // 20 chars
-    const qty = item.quantity.toString().padStart(4);  // 4 chars
-    const price = `₱${item.price.toFixed(2)}`.padStart(12);   // 12 chars
+    const qty = item.quantity.toString().padStart(2);  // 2 chars
+    const price = `₱${item.price.toFixed(2)}`.padStart(14);   // 14 chars
     const subtotal = `₱${item.subtotal.toFixed(2)}`.padStart(12); // 12 chars
 
     receipt += `${name}${qty}${price}${subtotal}\n`;
@@ -155,6 +164,56 @@ if (data.paymentMethod === 'cash') {
   receipt += 'THIS SERVES AS YOUR OFFICIAL RECEIPT\n\n';
   receipt += 'Thank you for shopping!\n';
   receipt += 'Please come again.\n\n';
+
+  receipt += '================================================\n';
+
+  return receipt;
+}
+
+export function generateVoidReceiptText(data: VoidReceiptData): string {
+  const dateStr = data.timestamp.toLocaleDateString();
+  const timeStr = data.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+  let receipt = '';
+
+  // Top border
+  receipt += '================================================\n';
+
+  // Company Header
+  receipt += '                 FASTPOS\n';
+  receipt += '          Point of Sale System\n';
+  receipt += '        Quiapo, Manila, Philippines\n';
+  receipt += '================================================\n\n';
+
+  // Receipt Title
+  receipt += '              VOID RECEIPT\n\n';
+
+  // Transaction Details
+  receipt += `Original TXN No : ${data.originalTransactionNo}\n`;
+  receipt += `Void TXN No     : ${data.voidTransactionNo}\n`;
+  receipt += `Original INV No : ${data.originalInvoiceNo}\n\n`;
+
+  receipt += `Date/Time       : ${dateStr} ${timeStr}\n`;
+  receipt += `Voided By       : ${data.voidedBy}\n`;
+  receipt += `Void Reason     : ${data.voidReason}\n\n`;
+
+  receipt += '------------------------------------------------\n';
+
+  // Original Transaction Details
+  const moneyLine = (label: string, value: number): string =>
+    `${label}`.padEnd(20) + `₱${value.toFixed(2)}`.padStart(28);
+
+  receipt += 'ORIGINAL TRANSACTION DETAILS\n';
+  receipt += '------------------------------------------------\n';
+  receipt += moneyLine('Original Total', data.originalTotal) + '\n';
+  receipt += moneyLine('Payment Method', data.originalPaymentMethod === 'cash' ? 0 : 0) + '\n'; // Payment method as text
+  receipt += `Payment Method : ${data.originalPaymentMethod.toUpperCase()}\n\n`;
+
+  receipt += '------------------------------------------------\n';
+  receipt += 'THIS DOCUMENT SERVES AS VOID RECEIPT\n';
+  receipt += 'Original transaction has been voided.\n\n';
+
+  receipt += 'Thank you.\n\n';
 
   receipt += '================================================\n';
 

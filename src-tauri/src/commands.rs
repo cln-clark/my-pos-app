@@ -1,4 +1,4 @@
-    use crate::entity::{role, user, product, txn_head, txn_dtl, category, discount_code};
+    use crate::entity::{role, user, product, txn_head, txn_dtl, category, discount_code, pos_zx_reading};
     use crate::AppState;
     use sea_orm::ConnectionTrait;
     use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, ActiveModelTrait, Set, Statement};
@@ -60,7 +60,7 @@
         pub is_scpwd_disc: bool,
         pub ordered_date: String,
         pub ordered_time: String,
-        pub disc_code_id: Option<i32>,
+        pub discount_code: Option<i32>,
         pub disc_description: Option<String>,
         pub vatable_amt: f64,
         pub vat_amt: f64,
@@ -104,6 +104,41 @@
         pub transaction_date: String,
         pub transaction_time: String,
         pub invoice_number: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct PosZxReadingRequest {
+        pub company_code: i32,
+        pub store_code: i32,
+        pub terminal_id: i32,
+        pub transaction_no: i32,
+        pub invoice_number: i32,
+        pub business_date: String,
+        pub payment_type: i32,
+        pub amount: f64,
+        pub discount_pct: f64,
+        pub local_tax: f64,
+        pub service_charge: f64,
+        pub take_out_charge: f64,
+        pub delivery_charge: f64,
+        pub card_cheque_num: String,
+        pub card_holder_name: String,
+        pub trace_no: i32,
+        pub approval_code: String,
+        pub terminal_ref_no: String,
+        pub transaction_type: String,
+        pub void_tx_num: i32,
+        pub discount_code: Option<i32>,
+        pub sr_pwd_id: String,
+        pub osca_pwd_name: String,
+        pub is_vat_exempt: bool,
+        pub sr_pwd_vat_exempt_sale: f64,
+        pub sr_pwd_total_amount: f64,
+        pub sr_pwd_count: i32,
+        pub cashier_user_code: String,
+        pub date_stamp: String,
+        pub time_stamp: String,
+        pub voided_by_user_code: String,
     }
 
     #[tauri::command]
@@ -268,7 +303,7 @@
         let next_id_result = db.query_one(Statement::from_string(
                                             sea_orm::DatabaseBackend::Sqlite,
                                             format!(
-                                                "SELECT COALESCE(MAX(transaction_no), 0) + 1 AS next_id FROM txn_head WHERE company_code = {} AND store_code = {} AND terminal_id = {}",
+                                                "SELECT COALESCE(MAX(transaction_no), 0) + 1 AS next_id FROM POS_TXN_HDR WHERE company_code = {} AND store_code = {} AND terminal_id = {}",
                                                 transaction_data.company_code,
                                                 transaction_data.store_code,
                                                 transaction_data.terminal_id
@@ -285,7 +320,7 @@
         // Step 3 — Query for max invoice_no
         let invoice_no_result = db.query_one(Statement::from_string(
                                             sea_orm::DatabaseBackend::Sqlite,
-                                            "SELECT COALESCE(MAX(invoice_no), 0) + 1 AS next_invoice FROM txn_head".to_owned(),
+                                            "SELECT COALESCE(MAX(invoice_no), 0) + 1 AS next_invoice FROM POS_TXN_HDR".to_owned(),
             )).await
             .map_err(|e| e.to_string())?;
 
@@ -346,7 +381,7 @@
                 is_scpwd_disc: Set(item.is_scpwd_disc),
                 ordered_date: Set(item.ordered_date),
                 ordered_time: Set(item.ordered_time),
-                disc_code_id: Set(item.disc_code_id),
+                discount_code: Set(item.discount_code),
                 disc_description: Set(item.disc_description),
                 vatable_amt: Set(item.vatable_amt),
                 vat_amt: Set(item.vat_amt),
@@ -376,4 +411,190 @@
             transaction_time: transaction_head_result.transaction_time,
             invoice_number: transaction_head_result.invoice_no.to_string(),
         })
+    }
+
+    #[tauri::command]
+    pub async fn create_pos_zx_reading(state: State<'_, AppState>, data: PosZxReadingRequest) -> Result<(), String> {
+        let db = &state.db;
+
+        let new_zx_reading = pos_zx_reading::ActiveModel {
+            company_code: Set(data.company_code),
+            store_code: Set(data.store_code),
+            terminal_id: Set(data.terminal_id),
+            transaction_no: Set(data.transaction_no),
+            invoice_number: Set(data.invoice_number),
+            business_date: Set(data.business_date),
+            payment_type: Set(data.payment_type),
+            amount: Set(rust_decimal::Decimal::from_f64(data.amount).unwrap_or_default()),
+            discount_pct: Set(rust_decimal::Decimal::from_f64(data.discount_pct).unwrap_or_default()),
+            local_tax: Set(rust_decimal::Decimal::from_f64(data.local_tax).unwrap_or_default()),
+            service_charge: Set(rust_decimal::Decimal::from_f64(data.service_charge).unwrap_or_default()),
+            take_out_charge: Set(rust_decimal::Decimal::from_f64(data.take_out_charge).unwrap_or_default()),
+            delivery_charge: Set(rust_decimal::Decimal::from_f64(data.delivery_charge).unwrap_or_default()),
+            card_cheque_num: Set(data.card_cheque_num),
+            card_holder_name: Set(data.card_holder_name),
+            trace_no: Set(data.trace_no),
+            approval_code: Set(data.approval_code),
+            terminal_ref_no: Set(data.terminal_ref_no),
+            transaction_type: Set(data.transaction_type),
+            void_tx_num: Set(data.void_tx_num),
+            discount_code: Set(data.discount_code),
+            sr_pwd_id: Set(data.sr_pwd_id),
+            osca_pwd_name: Set(data.osca_pwd_name),
+            is_vat_exempt: Set(data.is_vat_exempt),
+            sr_pwd_vat_exempt_sale: Set(rust_decimal::Decimal::from_f64(data.sr_pwd_vat_exempt_sale).unwrap_or_default()),
+            sr_pwd_total_amount: Set(rust_decimal::Decimal::from_f64(data.sr_pwd_total_amount).unwrap_or_default()),
+            sr_pwd_count: Set(data.sr_pwd_count),
+            cashier_user_code: Set(data.cashier_user_code),
+            date_stamp: Set(data.date_stamp),
+            time_stamp: Set(data.time_stamp),
+            voided_by_user_code: Set(data.voided_by_user_code),
+            ..Default::default()
+        };
+
+        new_zx_reading
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+
+        
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct VoidTransactionRequest {
+        pub original_transaction_no: i32,
+        pub voided_by_user_code: String,
+        pub void_reason: String,
+        pub company_code: i32,
+        pub store_code: i32,
+        pub terminal_id: i32,
+        pub business_date: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct TransactionHistoryResponse {
+        pub transaction_no: i32,
+        pub invoice_number: i32,
+        pub business_date: String,
+        pub amount: f64,
+        pub payment_type: i32,
+        pub transaction_type: String,
+        pub void_tx_num: i32,
+        pub cashier_user_code: String,
+        pub date_stamp: String,
+        pub time_stamp: String,
+        pub voided_by_user_code: Option<String>,
+    }
+
+    #[tauri::command]
+    pub async fn get_transaction_history(
+        company_code: i32,
+        store_code: i32,
+        terminal_id: i32,
+        business_date: String,
+        state: State<'_, AppState>
+    ) -> Result<Vec<TransactionHistoryResponse>, String> {
+        let db = &state.db;
+
+        let transactions = pos_zx_reading::Entity::find()
+            .filter(pos_zx_reading::Column::CompanyCode.eq(company_code))
+            .filter(pos_zx_reading::Column::StoreCode.eq(store_code))
+            .filter(pos_zx_reading::Column::TerminalId.eq(terminal_id))
+            .filter(pos_zx_reading::Column::BusinessDate.eq(&business_date))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let responses: Vec<TransactionHistoryResponse> = transactions
+            .into_iter()
+            .map(|t| TransactionHistoryResponse {
+                transaction_no: t.transaction_no,
+                invoice_number: t.invoice_number,
+                business_date: t.business_date,
+                amount: t.amount.to_string().parse::<f64>().unwrap_or(0.0),
+                payment_type: t.payment_type,
+                transaction_type: t.transaction_type,
+                void_tx_num: t.void_tx_num,
+                cashier_user_code: t.cashier_user_code,
+                date_stamp: t.date_stamp,
+                time_stamp: t.time_stamp,
+                voided_by_user_code: Some(t.voided_by_user_code),
+            })
+            .collect();
+
+        Ok(responses)
+    }
+
+    #[tauri::command]
+    pub async fn void_transaction(state: State<'_, AppState>, data: VoidTransactionRequest) -> Result<i32, String> {
+        let db = &state.db;
+
+        let max_txn = pos_zx_reading::Entity::find()
+            .filter(pos_zx_reading::Column::CompanyCode.eq(data.company_code))
+            .filter(pos_zx_reading::Column::StoreCode.eq(data.store_code))
+            .filter(pos_zx_reading::Column::TerminalId.eq(data.terminal_id))
+            .filter(pos_zx_reading::Column::BusinessDate.eq(&data.business_date))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let new_transaction_no = max_txn.iter().map(|t| t.transaction_no).max().unwrap_or(0) + 1;
+
+        let original_txn = pos_zx_reading::Entity::find()
+            .filter(pos_zx_reading::Column::CompanyCode.eq(data.company_code))
+            .filter(pos_zx_reading::Column::StoreCode.eq(data.store_code))
+            .filter(pos_zx_reading::Column::TerminalId.eq(data.terminal_id))
+            .filter(pos_zx_reading::Column::TransactionNo.eq(data.original_transaction_no))
+            .filter(pos_zx_reading::Column::BusinessDate.eq(&data.business_date))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if let Some(original) = original_txn {
+            let void_zx_reading = pos_zx_reading::ActiveModel {
+                company_code: Set(data.company_code),
+                store_code: Set(data.store_code),
+                terminal_id: Set(data.terminal_id),
+                transaction_no: Set(new_transaction_no),
+                business_date: Set(data.business_date),
+                payment_type: Set(original.payment_type),
+                amount: Set(-original.amount),
+                discount_pct: Set(original.discount_pct),
+                local_tax: Set(-original.local_tax),
+                service_charge: Set(original.service_charge),
+                take_out_charge: Set(original.take_out_charge),
+                delivery_charge: Set(original.delivery_charge),
+                card_cheque_num: Set(original.card_cheque_num.clone()),
+                card_holder_name: Set(original.card_holder_name.clone()),
+                trace_no: Set(original.trace_no),
+                approval_code: Set(original.approval_code.clone()),
+                terminal_ref_no: Set(original.terminal_ref_no.clone()),
+                transaction_type: Set("VOID".to_string()),
+                void_tx_num: Set(data.original_transaction_no),
+                discount_code: Set(original.discount_code),
+                sr_pwd_id: Set(original.sr_pwd_id.clone()),
+                osca_pwd_name: Set(original.osca_pwd_name.clone()),
+                is_vat_exempt: Set(original.is_vat_exempt),
+                sr_pwd_vat_exempt_sale: Set(-original.sr_pwd_vat_exempt_sale),
+                sr_pwd_total_amount: Set(-original.sr_pwd_total_amount),
+                sr_pwd_count: Set(original.sr_pwd_count),
+                cashier_user_code: Set(data.voided_by_user_code.clone()),
+                date_stamp: Set(chrono::Utc::now().format("%Y-%m-%d").to_string()),
+                time_stamp: Set(chrono::Utc::now().format("%H:%M:%S").to_string()),
+                voided_by_user_code: Set(data.voided_by_user_code),
+                invoice_number: Set(original.invoice_number),
+                ..Default::default()
+            };
+
+            void_zx_reading
+                .insert(&**db)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            Ok(new_transaction_no)
+        } else {
+            Err("Original transaction not found".to_string())
+        }
     }

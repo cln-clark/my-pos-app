@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PaymentMethodSelector, PaymentMethod } from "./payment-method-selector"
 import { Check } from "lucide-react"
 import { usePOS } from "@/lib/context"
@@ -14,7 +15,7 @@ interface PaymentScreenProps {
         product: { id: string; name: string; price: number }
         quantity: number
         discountQty: number
-        discountCodeId?: number
+        discountCode?: number
     }>
     onPaymentComplete: (method: PaymentMethod, change: number) => void
     onCancel: () => void
@@ -24,6 +25,7 @@ export function PaymentScreen({ total, items, onPaymentComplete, onCancel }: Pay
 
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card')
     const [amountTendered, setAmountTendered] = useState<string>('')
+    const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
     const parsedAmount = parseFloat(amountTendered) || 0;
     const change = paymentMethod === 'cash'
         ? Math.round((parsedAmount - total) * 100) / 100
@@ -37,7 +39,13 @@ export function PaymentScreen({ total, items, onPaymentComplete, onCancel }: Pay
             alert('Insufficient amount tendered');
             return;
         }
+        setConfirmDialogOpen(true);
+    };
+
+    const handleFinalConfirm = () => {
+        const amount = parseFloat(amountTendered);
         const change = Math.round((amount - total) * 100) / 100;
+        setConfirmDialogOpen(false);
         onPaymentComplete(paymentMethod, change);
     };
 
@@ -53,8 +61,8 @@ export function PaymentScreen({ total, items, onPaymentComplete, onCancel }: Pay
                         </CardHeader>
                         <CardContent className="flex-1 overflow-y-auto p-2 space-y-2">
                             {items.map((item) => {
-                                const hasDiscount = item.discountCodeId !== undefined && item.discountQty > 0;
-                                const discount = hasDiscount ? discountCodes.find(d => d.id === item.discountCodeId) : null;
+                                const hasDiscount = item.discountCode !== undefined && item.discountQty > 0;
+                                const discount = hasDiscount ? discountCodes.find(d => d.id === item.discountCode) : null;
 
                                 return (
                                     <div key={item.product.id} className={`flex justify-between items-center p-2 rounded border ${hasDiscount ? 'bg-green-50 border-green-300' : 'bg-slate-50 border-slate-200'}`}>
@@ -108,7 +116,7 @@ export function PaymentScreen({ total, items, onPaymentComplete, onCancel }: Pay
                                             type="button"
                                             variant="outline"
                                             onClick={() => setAmountTendered(total.toFixed(2))}
-                                            className="shrink-0 h-12 px-4 text-sm active:scale-95 transition-transform"
+                                            className="font-bold shrink-0 h-12 px-4 text-sm active:scale-95 transition-transform"
                                         >
                                             Exact
                                         </Button>
@@ -164,12 +172,60 @@ export function PaymentScreen({ total, items, onPaymentComplete, onCancel }: Pay
                                         )}
                                 className="flex-1 h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700 active:scale-95 transition-transform"
                             >
-                                Confirm
+                                {paymentMethod === 'card' ? 'Pay with Card' : 'Finish Transaction'}
                             </Button>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Confirmation Dialog */}
+            <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Confirm Transaction</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to finish this transaction?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-4">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Payment Method:</span>
+                            <span className="font-medium capitalize">{paymentMethod}</span>
+                        </div>
+                        {paymentMethod === 'cash' && (
+                            <>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Amount Tendered:</span>
+                                    <span className="font-medium">₱{parsedAmount.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Change:</span>
+                                    <span className="font-medium">₱{change.toFixed(2)}</span>
+                                </div>
+                            </>
+                        )}
+                        <div className="flex justify-between text-sm pt-2 border-t">
+                            <span className="text-muted-foreground font-medium">Total:</span>
+                            <span className="font-bold text-lg text-blue-600">₱{total.toFixed(2)}</span>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setConfirmDialogOpen(false)}
+                        >
+                            Back
+                        </Button>
+                        <Button
+                            onClick={handleFinalConfirm}
+                            className="bg-blue-600 hover:bg-blue-700"
+                        >
+                            Confirm
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

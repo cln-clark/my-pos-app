@@ -34,11 +34,11 @@ impl MigrationTrait for Migration {
 
         let db = manager.get_connection();
         db.execute_unprepared("
-                            INSERT OR IGNORE INTO discount_code (name, percent) VALUES
-                            ('Senior Citizen', 20),
-                            ('PWD', 20),
-                            ('Athlete', 20),
-                            ('Regular', 0);
+                            INSERT OR IGNORE INTO discount_code (id, name, percent) VALUES
+                            (1, 'Regular', 0),
+                            (2, 'Senior Citizen', 20),
+                            (3, 'PWD', 20),
+                            (4, 'Athlete', 20);
                             ").await?;
                             
         Ok(())

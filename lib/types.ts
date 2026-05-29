@@ -37,10 +37,13 @@ export interface CartItem {
   product: Product;
   quantity: number;
   discountQty: number; // Number of portions eligible for discount
-  discountCodeId?: number; // Per-item discount code
+  discountCode?: number; // Per-item discount code
   discountMode?: 'per-item' | 'portioning'; // Discount mode for SC/PWD
   totalPortion?: number; // Total portion for portioning discount
   regularPortionDiscount?: number; // Regular portion discount % for portioning
+  beneficiaryId?: string; // Beneficiary ID for SC/PWD/Athlete discounts
+  beneficiaryName?: string; // Beneficiary name for SC/PWD/Athlete discounts
+  newlyAdded?: number; // Timestamp when item was added (for visual emphasis)
 }
 
 // Transaction Item with VAT Breakdown
@@ -48,7 +51,10 @@ export interface TransactionItem {
   product: Product;
   quantity: number;
   discountQty: number;
-  discountCodeId?: number;
+  discountCode?: number;
+  // Beneficiary information for SC/PWD/Athlete discounts
+  beneficiaryId?: string;
+  beneficiaryName?: string;
   // BIR Computation Fields (simplified)
   vatAmount: number;
   vatableAmt: number;
@@ -81,9 +87,18 @@ export interface Transaction {
   businessDate?: string;
   terminalId?: number;
   cashAmountPaid?: number;
-  discountCodeId?: number;
+  discountCode?: number;
   encodedByUserCode?: string;
   printedByUserCode?: string;
+  invoiceNumber?: string;
+  cardPaymentData?: {
+    cardNumber: string;
+    cardHolderName: string;
+    cardType: string;
+    approvalCode: string;
+    traceNo: string;
+    terminalRefNo: string;
+  };
   // VAT summary fields
   vatableSales: number;
   vatExemptSales: number;
@@ -97,4 +112,9 @@ export interface Transaction {
   netSales: number;
   lessVat: number;
   serviceChargeAmount?: number;
+  // Void-related fields
+  transactionType?: 'SALE' | 'VOID';
+  voidTxNum?: number;
+  voidedByUserCode?: string;
+  voidReason?: string;
 }

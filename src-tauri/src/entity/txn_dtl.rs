@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use rust_decimal::Decimal;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "txn_dtl")]
+#[sea_orm(table_name = "POS_TXN_DTL")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
@@ -34,7 +34,7 @@ pub struct Model {
     pub ordered_date: String,
     #[sea_orm(column_type = "Text")]
     pub ordered_time: String,
-    pub disc_code_id: Option<i32>,
+    pub discount_code: Option<i32>,
     #[sea_orm(column_type = "Text")]
     pub disc_description: Option<String>,
     pub vatable_amt: f64,
@@ -55,25 +55,25 @@ pub enum Relation {
         from = "Column::CompanyCode",
         to = "super::txn_head::Column::CompanyCode"
     )]
-    TransactionHead,
+    PosTxnHdr,
     #[sea_orm(
         belongs_to = "super::txn_head::Entity",
         from = "Column::StoreCode",
         to = "super::txn_head::Column::StoreCode"
     )]
-    TransactionHead2,
+    PosTxnHdr2,
     #[sea_orm(
         belongs_to = "super::txn_head::Entity",
         from = "Column::TerminalId",
         to = "super::txn_head::Column::TerminalId"
     )]
-    TransactionHead3,
+    PosTxnHdr3,
     #[sea_orm(
         belongs_to = "super::txn_head::Entity",
         from = "Column::TransactionNo",
         to = "super::txn_head::Column::TransactionNo"
     )]
-    TransactionHead4,
+    PosTxnHdr4,
     #[sea_orm(
         belongs_to = "super::product::Entity",
         from = "Column::ProductId",
@@ -84,7 +84,7 @@ pub enum Relation {
 
 impl Related<super::txn_head::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::TransactionHead.def()
+        Relation::PosTxnHdr.def()
     }
 }
 

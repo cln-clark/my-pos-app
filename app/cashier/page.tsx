@@ -9,6 +9,10 @@ import { PaymentMethod, TxnMode } from "@/lib/types";
 import { PaymentScreen } from "@/components/pos/payment-screen";
 import { TxnModeSelector } from "@/components/pos/txn-mode-selector";
 import { DiscountModal } from "@/components/pos/discount-qty-modal";
+import { CardPaymentModal, CardPaymentData } from "@/components/pos/card-payment-modal";
+import { TransactionSuccessModal } from "@/components/pos/transaction-success-modal";
+import { Spinner } from "@/components/ui/spinner";
+import { toast } from "sonner";
 import { generateReceiptText } from "@/lib/receipt";
 import { calculateSalesBreakdown } from "@/lib/bir-computation";
 import { useState } from "react";
@@ -19,17 +23,39 @@ export default function CashierPage() {
 
     const { currentUser, cart, getCartTotal, clearCart, createTransaction, discountCodes, calculateDiscount, calculateItemVATBreakdown } = usePOS();
     const [ paymentOpen, setPaymentOpen ]  = useState(false)
+    const [ cardPaymentOpen, setCardPaymentOpen ]  = useState(false)
+    const [ cardPaymentData, setCardPaymentData ]  = useState<CardPaymentData | null>(null)
     const [ txnMode, setTxnMode ] = useState<TxnMode>('dine-in')
     const [ selectedDiscount, setSelectedDiscount ] = useState<number | null>(null)
     const [ cartOpen, setCartOpen ] = useState(true)
     const [ discountOpen, setDiscountOpen ] = useState(false)
     const [ selectedItemId, setSelectedItemId ] = useState<string | null>(null)
     const [ clearCartOpen, setClearCartOpen ] = useState(false)
+    const [ isProcessing, setIsProcessing ] = useState(false)
+    const [ successModalOpen, setSuccessModalOpen ] = useState(false)
+    const [ lastTransaction, setLastTransaction ] = useState<{ id: string; total: number; paymentMethod: string } | null>(null)
     const subtotal = getCartTotal();
     const discountAmount = calculateDiscount(cart);
     const total = subtotal - discountAmount;
 
     const handlePaymentComplete = async (method: PaymentMethod, change: number) => {
+        // If card payment, show card payment modal first
+        if (method === 'card') {
+            setCardPaymentOpen(true);
+            return;
+        }
+
+        await processTransaction(method, change, null);
+    };
+
+    const handleCardPaymentComplete = async (cardData: CardPaymentData) => {
+        setCardPaymentData(cardData);
+        await processTransaction('card', 0, cardData);
+    };
+
+    const processTransaction = async (method: PaymentMethod, change: number, cardData: CardPaymentData | null) => {
+        setIsProcessing(true);
+        
         // Convert cart items to transaction items with VAT breakdown
         const transactionItems = cart.map(item => calculateItemVATBreakdown(item));
 
@@ -57,8 +83,13 @@ export default function CashierPage() {
         const grossSales = subtotal;
         // Net Sales = Gross Sales - Senior Discount - PWD Discount - Athlete Discount - Regular Discount - Less VAT
         const netSales = grossSales - seniorDiscountAmount - pwdDiscountAmount - athleteDiscountAmount - regularDiscountAmount - lessVat;
-        // Total Due = Net Sales - VAT Amount (since VAT is already included in the item prices)
-        const totalDue = netSales - vatAmount12Pct;
+        // Total Due = Net Sales (VAT is already included in item prices, so customer pays full amount)
+        const totalDue = netSales;
+
+        // Extract beneficiary info from cart items (for SC/PWD/Athlete discounts)
+        const beneficiaryInfoItem = cart.find(item => item.beneficiaryId && item.beneficiaryName);
+        const beneficiaryId = beneficiaryInfoItem?.beneficiaryId;
+        const beneficiaryName = beneficiaryInfoItem?.beneficiaryName;
 
         const transaction = await createTransaction({
             cashierUserCode: currentUser!.id,
@@ -71,7 +102,7 @@ export default function CashierPage() {
             paymentMethod: method,
             change: method === 'cash' ? change : undefined,
             txnMode: txnMode,
-            discountCodeId: selectedDiscount || undefined,
+            discountCode: selectedDiscount || undefined,
             vatableSales,
             vatExemptSales,
             zeroRatedSales: 0,
@@ -83,6 +114,7 @@ export default function CashierPage() {
             grossSales,
             netSales,
             lessVat,
+            cardPaymentData: cardData || undefined,
         });
 
         // Generate receipt text
@@ -130,12 +162,27 @@ export default function CashierPage() {
 
         clearCart();
         setPaymentOpen(false);
+        setIsProcessing(false);
+        setLastTransaction({
+            id: transaction.id,
+            total: transaction.total,
+            paymentMethod: transaction.paymentMethod
+        });
+        setSuccessModalOpen(true);
     };
 
     return (
         <AppLayout>
             {paymentOpen ? (
-                <div className="flex flex-col h-full min-h-0 gap-4">
+                <div className="flex flex-col h-full min-h-0 gap-4 relative">
+                    {isProcessing && (
+                        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50">
+                            <div className="flex flex-col items-center gap-3">
+                                <Spinner size={48} />
+                                <p className="text-lg font-medium">Processing transaction...</p>
+                            </div>
+                        </div>
+                    )}
                     <div className="shrink-0">
                         <h1 className="text-2xl font-bold">Payment</h1>
                     </div>
@@ -263,6 +310,25 @@ export default function CashierPage() {
                 discountCodes={discountCodes}
             />
 
+            {/* Card Payment Modal */}
+            <CardPaymentModal
+                open={cardPaymentOpen}
+                onOpenChange={setCardPaymentOpen}
+                amount={total}
+                onPaymentComplete={handleCardPaymentComplete}
+            />
+
+            {/* Transaction Success Modal */}
+            {lastTransaction && (
+                <TransactionSuccessModal
+                    open={successModalOpen}
+                    onOpenChange={setSuccessModalOpen}
+                    transactionId={lastTransaction.id}
+                    total={lastTransaction.total}
+                    paymentMethod={lastTransaction.paymentMethod}
+                />
+            )}
+
             {/* Clear Cart Confirmation Dialog */}
             <Dialog open={clearCartOpen} onOpenChange={setClearCartOpen}>
                 <DialogContent>
@@ -284,6 +350,7 @@ export default function CashierPage() {
                             onClick={() => {
                                 clearCart();
                                 setClearCartOpen(false);
+                                setSelectedItemId(null);
                             }}
                         >
                             Clear Cart

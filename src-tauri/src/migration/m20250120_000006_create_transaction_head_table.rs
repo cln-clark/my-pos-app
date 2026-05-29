@@ -9,128 +9,128 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(TxnHead::Table)
+                    .table(PosTxnHdr::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(TxnHead::CompanyCode)
+                        ColumnDef::new(PosTxnHdr::CompanyCode)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::StoreCode)
+                        ColumnDef::new(PosTxnHdr::StoreCode)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::TerminalId)
+                        ColumnDef::new(PosTxnHdr::TerminalId)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::TransactionNo)
+                        ColumnDef::new(PosTxnHdr::TransactionNo)
                             .integer()
                             .not_null(),
                     )
                     .primary_key(
                         Index::create()
                             .primary()
-                            .col(TxnHead::CompanyCode)
-                            .col(TxnHead::StoreCode)
-                            .col(TxnHead::TerminalId)
-                            .col(TxnHead::TransactionNo),
+                            .col(PosTxnHdr::CompanyCode)
+                            .col(PosTxnHdr::StoreCode)
+                            .col(PosTxnHdr::TerminalId)
+                            .col(PosTxnHdr::TransactionNo),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::InvoiceNo)
+                        ColumnDef::new(PosTxnHdr::InvoiceNo)
                             .integer()
                             .not_null()
                             .unique_key(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::BusinessDate)
+                        ColumnDef::new(PosTxnHdr::BusinessDate)
                             .string()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::TransactionDate)
+                        ColumnDef::new(PosTxnHdr::TransactionDate)
                             .string()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::TransactionTime)
+                        ColumnDef::new(PosTxnHdr::TransactionTime)
                             .string()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::CashierUserCode)
+                        ColumnDef::new(PosTxnHdr::CashierUserCode)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::TxnModeCode)
+                        ColumnDef::new(PosTxnHdr::TxnModeCode)
                             .integer()
                             .not_null()
                             .default(1),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::Total)
+                        ColumnDef::new(PosTxnHdr::Total)
                             .double()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::PaymentId)
+                        ColumnDef::new(PosTxnHdr::PaymentId)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::ChangeGiven)
+                        ColumnDef::new(PosTxnHdr::ChangeGiven)
                             .double(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::CashAmountPaid)
+                        ColumnDef::new(PosTxnHdr::CashAmountPaid)
                             .double(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::EncodedByUserCode)
+                        ColumnDef::new(PosTxnHdr::EncodedByUserCode)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnHead::PrintedByUserCode)
+                        ColumnDef::new(PosTxnHdr::PrintedByUserCode)
                             .integer()
                             .not_null(),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name("fk-TXN_HEAD-txn_mode_code")
-                            .from(TxnHead::Table, TxnHead::TxnModeCode)
+                            .name("fk-POS_TXN_HDR-txn_mode_code")
+                            .from(PosTxnHdr::Table, PosTxnHdr::TxnModeCode)
                             .to(TxnMode::Table, TxnMode::Id)
                             .on_delete(ForeignKeyAction::Restrict),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name("fk-TXN_HEAD-cashier_user_code")
-                            .from(TxnHead::Table, TxnHead::CashierUserCode)
+                            .name("fk-POS_TXN_HDR-cashier_user_code")
+                            .from(PosTxnHdr::Table, PosTxnHdr::CashierUserCode)
                             .to(Users::Table, Users::Id)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name("fk-TXN_HEAD-payment_id")
-                            .from(TxnHead::Table, TxnHead::PaymentId)
+                            .name("fk-POS_TXN_HDR-payment_id")
+                            .from(PosTxnHdr::Table, PosTxnHdr::PaymentId)
                             .to(PaymentType::Table, PaymentType::Id)
                             .on_delete(ForeignKeyAction::Restrict),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name("fk-TXN_HEAD-company_code")
-                            .from(TxnHead::Table, TxnHead::CompanyCode)
+                            .name("fk-POS_TXN_HDR-company_code")
+                            .from(PosTxnHdr::Table, PosTxnHdr::CompanyCode)
                             .to(CompanyCode::Table, CompanyCode::CompanyCode)
                             .on_delete(ForeignKeyAction::Restrict),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name("fk-TXN_HEAD-store_code")
-                            .from(TxnHead::Table, TxnHead::StoreCode)
+                            .name("fk-POS_TXN_HDR-store_code")
+                            .from(PosTxnHdr::Table, PosTxnHdr::StoreCode)
                             .to(StoreCode::Table, StoreCode::StoreCode)
                             .on_delete(ForeignKeyAction::Restrict),
                     )
@@ -141,13 +141,13 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(TxnHead::Table).to_owned())
+            .drop_table(Table::drop().table(PosTxnHdr::Table).to_owned())
             .await
     }
 }
 
 #[derive(DeriveIden)]
-enum TxnHead {
+enum PosTxnHdr {
     Table,
     CompanyCode,
     StoreCode,

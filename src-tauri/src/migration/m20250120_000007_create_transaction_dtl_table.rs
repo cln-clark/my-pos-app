@@ -9,206 +9,206 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(TxnDtl::Table)
+                    .table(PosTxnDtl::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(TxnDtl::Id)
+                        ColumnDef::new(PosTxnDtl::Id)
                             .integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::CompanyCode)
+                        ColumnDef::new(PosTxnDtl::CompanyCode)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::StoreCode)
+                        ColumnDef::new(PosTxnDtl::StoreCode)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::TerminalId)
+                        ColumnDef::new(PosTxnDtl::TerminalId)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::TransactionNo)
+                        ColumnDef::new(PosTxnDtl::TransactionNo)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::BusinessDate)
+                        ColumnDef::new(PosTxnDtl::BusinessDate)
                             .string()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::CategoryCode)
+                        ColumnDef::new(PosTxnDtl::CategoryCode)
                             .string()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::ProductId)
+                        ColumnDef::new(PosTxnDtl::ProductId)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::Qty)
+                        ColumnDef::new(PosTxnDtl::Qty)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::ProductName)
+                        ColumnDef::new(PosTxnDtl::ProductName)
                             .string()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::Sku)
+                        ColumnDef::new(PosTxnDtl::Sku)
                             .string()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::UnitPriceInclTax)
+                        ColumnDef::new(PosTxnDtl::UnitPriceInclTax)
                             .double()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::DiscountPercent)
+                        ColumnDef::new(PosTxnDtl::DiscountPercent)
                             .decimal()
                             .not_null()
                             .default(0.0),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::PriceBeforeDisc)
+                        ColumnDef::new(PosTxnDtl::PriceBeforeDisc)
                             .decimal()
                             .not_null()
                             .default(0.0),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::InvoiceNo)
+                        ColumnDef::new(PosTxnDtl::InvoiceNo)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::LineSequence)
+                        ColumnDef::new(PosTxnDtl::LineSequence)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::TxnModeCode)
+                        ColumnDef::new(PosTxnDtl::TxnModeCode)
                             .integer()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::IsVatExempt)
+                        ColumnDef::new(PosTxnDtl::IsVatExempt)
                             .boolean()
                             .not_null()
                             .default(false),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::PriceBeforeLessVat)
+                        ColumnDef::new(PosTxnDtl::PriceBeforeLessVat)
                             .decimal()
                             .not_null()
                             .default(0.0),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::IsScpwdDisc)
+                        ColumnDef::new(PosTxnDtl::IsScpwdDisc)
                             .boolean()
                             .not_null()
                             .default(false),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::OrderedDate)
+                        ColumnDef::new(PosTxnDtl::OrderedDate)
                             .string()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::OrderedTime)
+                        ColumnDef::new(PosTxnDtl::OrderedTime)
                             .string()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::DiscCodeId)
+                        ColumnDef::new(PosTxnDtl::DiscountCode)
                             .integer()
                             .null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::DiscDescription)
+                        ColumnDef::new(PosTxnDtl::DiscDescription)
                             .string()
                             .null(),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::VatableAmt)
+                        ColumnDef::new(PosTxnDtl::VatableAmt)
                             .double()
                             .not_null()
                             .default(0.0),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::VatAmt)
+                        ColumnDef::new(PosTxnDtl::VatAmt)
                             .double()
                             .not_null()
                             .default(0.0),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::LessVat)
+                        ColumnDef::new(PosTxnDtl::LessVat)
                             .double()
                             .not_null()
                             .default(0.0),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::VatExemptAmt)
+                        ColumnDef::new(PosTxnDtl::VatExemptAmt)
                             .double()
                             .not_null()
                             .default(0.0),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::ZeroRatedAmt)
+                        ColumnDef::new(PosTxnDtl::ZeroRatedAmt)
                             .double()
                             .not_null()
                             .default(0.0),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::DiscAmt)
+                        ColumnDef::new(PosTxnDtl::DiscAmt)
                             .decimal()
                             .not_null()
                             .default(0.0),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::ChargeAmt)
+                        ColumnDef::new(PosTxnDtl::ChargeAmt)
                             .decimal()
                             .not_null()
                             .default(0.0),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::TotalPortionQty)
+                        ColumnDef::new(PosTxnDtl::TotalPortionQty)
                             .integer()
                             .not_null()
                             .default(0),
                     )
                     .col(
-                        ColumnDef::new(TxnDtl::DiscPortionQty)
+                        ColumnDef::new(PosTxnDtl::DiscPortionQty)
                             .integer()
                             .not_null()
                             .default(0),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name("fk-txn_dtl-txn_head")
-                            .from(TxnDtl::Table, TxnDtl::CompanyCode)
-                            .to(TxnHead::Table, TxnHead::CompanyCode)
-                            .from_col(TxnDtl::StoreCode)
-                            .to_col(TxnHead::StoreCode)
-                            .from_col(TxnDtl::TerminalId)
-                            .to_col(TxnHead::TerminalId)
-                            .from_col(TxnDtl::TransactionNo)
-                            .to_col(TxnHead::TransactionNo)
+                            .name("fk-POS_TXN_DTL-POS_TXN_HDR")
+                            .from(PosTxnDtl::Table, PosTxnDtl::CompanyCode)
+                            .to(PosTxnHdr::Table, PosTxnHdr::CompanyCode)
+                            .from_col(PosTxnDtl::StoreCode)
+                            .to_col(PosTxnHdr::StoreCode)
+                            .from_col(PosTxnDtl::TerminalId)
+                            .to_col(PosTxnHdr::TerminalId)
+                            .from_col(PosTxnDtl::TransactionNo)
+                            .to_col(PosTxnHdr::TransactionNo)
                             .on_delete(ForeignKeyAction::Cascade),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name("fk-txn_dtl-product_id")
-                            .from(TxnDtl::Table, TxnDtl::ProductId) // child
+                            .name("fk-POS_TXN_DTL-product_id")
+                            .from(PosTxnDtl::Table, PosTxnDtl::ProductId) // child
                             .to(Products::Table, Products::Id) // parent
                             .on_delete(ForeignKeyAction::Restrict),
                     )
@@ -219,13 +219,13 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(TxnDtl::Table).to_owned())
+            .drop_table(Table::drop().table(PosTxnDtl::Table).to_owned())
             .await
     }
 }
 
 #[derive(DeriveIden)]
-enum TxnDtl {
+enum PosTxnDtl {
     Table,
     Id,
     CompanyCode,
@@ -249,7 +249,7 @@ enum TxnDtl {
     IsScpwdDisc,
     OrderedDate,
     OrderedTime,
-    DiscCodeId,
+    DiscountCode,
     DiscDescription,
     VatableAmt,
     VatAmt,
@@ -275,7 +275,7 @@ enum StoreCode {
 }
 
 #[derive(DeriveIden)]
-enum TxnHead {
+enum PosTxnHdr {
     Table,
     CompanyCode,
     StoreCode,

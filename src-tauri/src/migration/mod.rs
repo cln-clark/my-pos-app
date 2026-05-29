@@ -9,6 +9,7 @@ pub mod m20250120_000008_create_company_code_table;
 pub mod m20250120_000009_create_store_code_table;
 pub mod m20250120_000010_create_users_table;
 pub mod m20250120_000011_create_discount_code_table;
+pub mod m20250120_000012_create_pos_zx_reading_table;
 
 pub use sea_orm_migration::prelude::*;
 
@@ -29,6 +30,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250120_000009_create_store_code_table::Migration),
             Box::new(m20250120_000010_create_users_table::Migration),
             Box::new(m20250120_000011_create_discount_code_table::Migration),
+            Box::new(m20250120_000012_create_pos_zx_reading_table::Migration),
         ]
     }
 }

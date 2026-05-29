@@ -22,7 +22,10 @@ pub fn run() {
       commands::get_products,
       commands::get_categories,
       commands::get_discount_codes,
-      commands::create_transaction
+      commands::create_transaction,
+      commands::create_pos_zx_reading,
+      commands::void_transaction,
+      commands::get_transaction_history
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

@@ -13,13 +13,13 @@ interface DiscountModalProps {
     discountCodes: Array<{ id: number; name: string; percent: number }>;
 }
 
-type DiscountStep = 'select' | 'scpwd-mode' | 'portioning' | 'regular';
+type DiscountStep = 'select' | 'scpwd-mode' | 'card-info' | 'portioning' | 'regular';
 
 export function DiscountModal({ open, onOpenChange, selectedItemId, discountCodes }: DiscountModalProps) {
     const { cart, setItemDiscountCode, setItemPortioningDiscount, updateDiscountQty } = usePOS();
 
     const selectedItem = cart.find(item => item.product.id === selectedItemId);
-    const currentDiscountId = selectedItem?.discountCodeId;
+    const currentDiscountId = selectedItem?.discountCode;
 
     const [step, setStep] = useState<DiscountStep>('select');
     const [selectedDiscountName, setSelectedDiscountName] = useState<string | null>(null);
@@ -28,6 +28,8 @@ export function DiscountModal({ open, onOpenChange, selectedItemId, discountCode
     const [discountPortion, setDiscountPortion] = useState<string>('');
     const [regularPortionDiscount, setRegularPortionDiscount] = useState<string>('');
     const [regularDiscountPercent, setRegularDiscountPercent] = useState<string>('');
+    const [beneficiaryId, setBeneficiaryId] = useState<string>('');
+    const [beneficiaryName, setBeneficiaryName] = useState<string>('');
 
     const handleRemoveDiscount = () => {
         if (selectedItemId) {
@@ -38,22 +40,36 @@ export function DiscountModal({ open, onOpenChange, selectedItemId, discountCode
     };
 
     const handleSelectDiscount = (discountId: number | null, discountName: string | null) => {
-        if (discountName === 'Senior Citizen' || discountName === 'PWD') {
+        if (discountName === 'Senior Citizen' || discountName === 'PWD' || discountName === 'Athlete') {
             setSelectedDiscountId(discountId);
             setSelectedDiscountName(discountName);
-            setStep('scpwd-mode');
-        } else if (discountName === 'Athlete') {
-            if (selectedItemId) {
-                setItemPortioningDiscount(selectedItemId, discountId || undefined, 'per-item', 0, selectedItem?.quantity || 0, 0);
-                onOpenChange(false);
-                resetForm();
-            }
+            setStep('card-info');
         } else if (discountName === 'Regular') {
             setSelectedDiscountId(discountId);
             setSelectedDiscountName(discountName);
             setStep('regular');
         } else {
             handleRemoveDiscount();
+        }
+    };
+
+    const handleCardInfoSubmit = () => {
+        if (!beneficiaryId.trim() || !beneficiaryName.trim()) {
+            alert('Beneficiary ID and Beneficiary Name are required');
+            return;
+        }
+        // Save beneficiary info to the cart item
+        if (selectedItemId && selectedItem) {
+            updateDiscountQty(selectedItemId, selectedItem.discountQty, beneficiaryId, beneficiaryName);
+        }
+        if (selectedDiscountName === 'Senior Citizen' || selectedDiscountName === 'PWD') {
+            setStep('scpwd-mode');
+        } else if (selectedDiscountName === 'Athlete') {
+            if (selectedItemId) {
+                setItemPortioningDiscount(selectedItemId, selectedDiscountId || undefined, 'per-item', 0, selectedItem?.quantity || 0, 0);
+                onOpenChange(false);
+                resetForm();
+            }
         }
     };
 
@@ -97,6 +113,8 @@ export function DiscountModal({ open, onOpenChange, selectedItemId, discountCode
         setDiscountPortion('');
         setRegularPortionDiscount('');
         setRegularDiscountPercent('');
+        setBeneficiaryId('');
+        setBeneficiaryName('');
     };
 
     const handleCancel = () => {
@@ -110,6 +128,7 @@ export function DiscountModal({ open, onOpenChange, selectedItemId, discountCode
                 <DialogHeader>
                     <DialogTitle className="text-2xl font-bold">
                         {step === 'select' && 'Select Discount'}
+                        {step === 'card-info' && 'Card Information'}
                         {step === 'scpwd-mode' && 'SC/PWD Discount Mode'}
                         {step === 'portioning' && 'Portioning Discount'}
                         {step === 'regular' && 'Regular'}
@@ -128,11 +147,12 @@ export function DiscountModal({ open, onOpenChange, selectedItemId, discountCode
                             </div>
 
                             {step === 'select' && (
-                                <div className="flex flex-col gap-2">
+                                <div className="grid grid-cols-2 gap-2">
                                     <Button
                                         variant="outline"
                                         size="lg"
                                         onClick={handleRemoveDiscount}
+                                        disabled={!currentDiscountId}
                                         className="h-14 text-lg font-semibold active:scale-95 transition-transform"
                                     >
                                         Remove Discount
@@ -148,6 +168,31 @@ export function DiscountModal({ open, onOpenChange, selectedItemId, discountCode
                                             {discount.name} ({discount.percent}%)
                                         </Button>
                                     ))}
+                                </div>
+                            )}
+
+                            {step === 'card-info' && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-sm font-medium mb-1 block">Beneficiary ID</label>
+                                        <Input
+                                            type="text"
+                                            value={beneficiaryId}
+                                            onChange={(e) => setBeneficiaryId(e.target.value)}
+                                            placeholder="Enter beneficiary ID"
+                                            className="h-12 text-lg"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium mb-1 block">Beneficiary Name</label>
+                                        <Input
+                                            type="text"
+                                            value={beneficiaryName}
+                                            onChange={(e) => setBeneficiaryName(e.target.value.replace(/[^a-zA-Z\s\-']/g, '').toUpperCase())}
+                                            placeholder="Enter beneficiary name"
+                                            className="h-12 text-lg"
+                                        />
+                                    </div>
                                 </div>
                             )}
 
@@ -241,6 +286,14 @@ export function DiscountModal({ open, onOpenChange, selectedItemId, discountCode
                             className="h-12 px-8 text-base font-semibold active:scale-95 transition-transform"
                         >
                             Back
+                        </Button>
+                    )}
+                    {step === 'card-info' && (
+                        <Button
+                            onClick={handleCardInfoSubmit}
+                            className="h-12 px-8 text-base font-semibold active:scale-95 transition-transform"
+                        >
+                            Next
                         </Button>
                     )}
                     {step === 'portioning' && (
