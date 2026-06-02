@@ -1,0 +1,315 @@
+use sea_orm_migration::prelude::*;
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(CrrZxReading::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(CrrZxReading::CompanyCode)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::StoreCode)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::TerminalId)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::TransactionNo)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::InvoiceNumber)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::BusinessDate)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::PaymentType)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::Amount)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::DiscountPct)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::LocalTax)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::ServiceCharge)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::TakeOutCharge)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::DeliveryCharge)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::CardChequeNum)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::CardHolderName)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::TraceNo)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::ApprovalCode)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::TerminalRefNo)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::TransactionType)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::VoidTxNum)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::DiscountCode)
+                            .integer()
+                            .null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::SrPwdId)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::OscaPwdName)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::IsVatExempt)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::SrPwdVatExemptSale)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::SrPwdTotalAmount)
+                            .decimal()
+                            .not_null()
+                            .default(0.0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::SrPwdCount)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::CashierUserCode)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::DateStamp)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::TimeStamp)
+                            .string()
+                            .not_null()
+                            .default("00:00:00"),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::VoidedByUserCode)
+                            .string()
+                            .not_null()
+                            .default(""),
+                    )
+                    .col(
+                        ColumnDef::new(CrrZxReading::VoidReason)
+                            .string()
+                            .not_null()
+                            .default(""),
+                    )
+                    .primary_key(
+                        Index::create()
+                            .primary()
+                            .col(CrrZxReading::CompanyCode)
+                            .col(CrrZxReading::StoreCode)
+                            .col(CrrZxReading::TerminalId)
+                            .col(CrrZxReading::TransactionNo)
+                            .col(CrrZxReading::BusinessDate)
+                            .col(CrrZxReading::PaymentType),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-CRR_ZX_READING-company_code")
+                            .from(CrrZxReading::Table, CrrZxReading::CompanyCode)
+                            .to(CompanyCode::Table, CompanyCode::CompanyCode)
+                            .on_delete(ForeignKeyAction::Restrict),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-CRR_ZX_READING-store_code")
+                            .from(CrrZxReading::Table, CrrZxReading::StoreCode)
+                            .to(StoreCode::Table, StoreCode::StoreCode)
+                            .on_delete(ForeignKeyAction::Restrict),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-CRR_ZX_READING-payment_type")
+                            .from(CrrZxReading::Table, CrrZxReading::PaymentType)
+                            .to(PaymentType::Table, PaymentType::Id)
+                            .on_delete(ForeignKeyAction::Restrict),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-CRR_ZX_READING-discount_code")
+                            .from(CrrZxReading::Table, CrrZxReading::DiscountCode)
+                            .to(DiscountCode::Table, DiscountCode::Id)
+                            .on_delete(ForeignKeyAction::Restrict),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-CRR_ZX_READING-cashier_user_code")
+                            .from(CrrZxReading::Table, CrrZxReading::CashierUserCode)
+                            .to(Users::Table, Users::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(CrrZxReading::Table).to_owned())
+            .await
+    }
+}
+
+#[derive(DeriveIden)]
+enum CrrZxReading {
+    Table,
+    CompanyCode,
+    StoreCode,
+    TerminalId,
+    TransactionNo,
+    InvoiceNumber,
+    BusinessDate,
+    PaymentType,
+    Amount,
+    DiscountPct,
+    LocalTax,
+    ServiceCharge,
+    TakeOutCharge,
+    DeliveryCharge,
+    CardChequeNum,
+    CardHolderName,
+    TraceNo,
+    ApprovalCode,
+    TerminalRefNo,
+    TransactionType,
+    VoidTxNum,
+    DiscountCode,
+    SrPwdId,
+    OscaPwdName,
+    IsVatExempt,
+    SrPwdVatExemptSale,
+    SrPwdTotalAmount,
+    SrPwdCount,
+    CashierUserCode,
+    DateStamp,
+    TimeStamp,
+    VoidedByUserCode,
+    VoidReason,
+}
+
+#[derive(DeriveIden)]
+enum CompanyCode {
+    Table,
+    CompanyCode,
+}
+
+#[derive(DeriveIden)]
+enum StoreCode {
+    Table,
+    StoreCode,
+}
+
+#[derive(DeriveIden)]
+enum PaymentType {
+    Table,
+    Id,
+}
+
+#[derive(DeriveIden)]
+enum DiscountCode {
+    Table,
+    Id,
+}
+
+#[derive(DeriveIden)]
+enum Users {
+    Table,
+    Id,
+}

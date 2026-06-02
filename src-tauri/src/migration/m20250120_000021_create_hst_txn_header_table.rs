@@ -1,0 +1,139 @@
+use sea_orm_migration::prelude::*;
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(HstTxnHdr::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(HstTxnHdr::CompanyCode)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::StoreCode)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::TerminalId)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::TransactionNo)
+                            .integer()
+                            .not_null(),
+                    )
+                    .primary_key(
+                        Index::create()
+                            .primary()
+                            .col(HstTxnHdr::CompanyCode)
+                            .col(HstTxnHdr::StoreCode)
+                            .col(HstTxnHdr::TerminalId)
+                            .col(HstTxnHdr::TransactionNo),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::InvoiceNo)
+                            .integer()
+                            .not_null()
+                            .unique_key(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::BusinessDate)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::TransactionDate)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::TransactionTime)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::CashierUserCode)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::TxnModeCode)
+                            .integer()
+                            .not_null()
+                            .default(1),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::Total)
+                            .double()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::PaymentId)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::ChangeGiven)
+                            .double(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::CashAmountPaid)
+                            .double(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::EncodedByUserCode)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::PrintedByUserCode)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(HstTxnHdr::OriginalTransactionNo)
+                            .integer()
+                            .null(),
+                    )
+                    .to_owned(),
+            )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(HstTxnHdr::Table).to_owned())
+            .await
+    }
+}
+
+#[derive(DeriveIden)]
+enum HstTxnHdr {
+    Table,
+    CompanyCode,
+    StoreCode,
+    TerminalId,
+    TransactionNo,
+    CashierUserCode,
+    InvoiceNo,
+    BusinessDate,
+    TransactionDate,
+    TransactionTime,
+    TxnModeCode,
+    CashAmountPaid,
+    EncodedByUserCode,
+    PrintedByUserCode,
+    Total,
+    PaymentId,
+    ChangeGiven,
+    OriginalTransactionNo,
+}
