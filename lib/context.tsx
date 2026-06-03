@@ -5,6 +5,7 @@ import { User, Product, CartItem, Transaction, Category, TransactionItem, Discou
 import { getProducts, getCategories, getDiscountCodes, createTransaction as createTransactionData, createPosZxReading, loginUser as loginUserApi } from "./data";
 import { calculateItemVATBreakdown as calculateItemVAT, calculateSalesBreakdown } from './bir-computation';
 import { toast } from 'sonner';
+import { invoke } from '@tauri-apps/api/core';
 
 interface POSContextType {
     currentUser: User | null;
@@ -35,7 +36,12 @@ interface POSContextType {
 
     // Manager auth
     managerAuth: User | null;
-    setManagerAuth: (manager: User | null) => void;
+    managerAuthSource: 'main' | 'override' | null;
+    setManagerAuth: (manager: User | null, source?: 'main' | 'override') => void;
+
+    // Business day status
+    businessDayOpen: boolean;
+    fetchBusinessDayStatus: () => Promise<void>;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -48,7 +54,14 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     const [categories, setCategories] = useState<Category[]>([]);
     const [discountCodes, setDiscountCodes] = useState<DiscountCodeResponse[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [managerAuth, setManagerAuth] = useState<User | null>(null);
+    const [managerAuthState, setManagerAuthState] = useState<User | null>(null);
+    const [managerAuthSource, setManagerAuthSource] = useState<'main' | 'override' | null>(null);
+    const [businessDayOpen, setBusinessDayOpen] = useState(false);
+
+    const setManagerAuth = useCallback((manager: User | null, source?: 'main' | 'override') => {
+        setManagerAuthState(manager);
+        setManagerAuthSource(source || null);
+    }, []);
 
     useEffect(() => {
         getProducts().then((data) => {
@@ -60,6 +73,16 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         getDiscountCodes().then((data) => {
             setDiscountCodes(data);
         });
+        fetchBusinessDayStatus();
+    }, []);
+
+    const fetchBusinessDayStatus = useCallback(async () => {
+        try {
+            const isOpen = await invoke<boolean>('get_business_day_status');
+            setBusinessDayOpen(isOpen);
+        } catch (error) {
+            console.error('Failed to fetch business day status:', error);
+        }
     }, []);
 
     const login = useCallback(async (cashierUserCode: number, pin: string): Promise<boolean> => {
@@ -455,8 +478,11 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         clearCart,
         transactions,
         createTransaction,
-        managerAuth,
-        setManagerAuth
+        managerAuth: managerAuthState,
+        managerAuthSource,
+        setManagerAuth,
+        businessDayOpen,
+        fetchBusinessDayStatus
     };
 
     

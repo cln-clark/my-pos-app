@@ -1,23 +1,52 @@
 'use client';
 
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { History, Receipt, BarChart3, Package, Users, Settings, Moon } from "lucide-react";
+import { History, Receipt, BarChart3, Package, Users, Settings, Moon, Sun, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { usePOS } from "@/lib/context";
 import { ManagerLayout } from "@/components/layout/manager-layout";
 import { Button } from "@/components/ui/button";
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PinConfirmationDialog } from "@/components/pos/pin-confirmation-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function ManagerDashboardPage() {
     const router = useRouter();
     const { managerAuth } = usePOS();
     const [pinDialogOpen, setPinDialogOpen] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [businessDayOpen, setBusinessDayOpen] = useState(false);
+    const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+    const [pendingAction, setPendingAction] = useState<'day-start' | 'day-end' | null>(null);
 
-    const handleDayEnd = async () => {
+    useEffect(() => {
+        fetchBusinessDayStatus();
+    }, []);
+
+    const fetchBusinessDayStatus = async () => {
+        try {
+            const isOpen = await invoke<boolean>('get_business_day_status');
+            console.log('Business day status:', isOpen);
+            setBusinessDayOpen(isOpen);
+        } catch (error) {
+            console.error('Failed to fetch business day status:', error);
+        }
+    };
+
+    const handleDayStart = () => {
+        setPendingAction('day-start');
+        setConfirmDialogOpen(true);
+    };
+
+    const handleDayEnd = () => {
+        setPendingAction('day-end');
+        setConfirmDialogOpen(true);
+    };
+
+    const handleConfirmAction = () => {
+        setConfirmDialogOpen(false);
         setPinDialogOpen(true);
     };
 
@@ -27,17 +56,28 @@ export default function ManagerDashboardPage() {
             // Validate PIN (assuming role_id 2 is manager)
             const users = await invoke<any[]>('get_users');
             const manager = users.find((u: any) => u.role_id === 2 && u.pin === pin);
-            
+
             if (!manager) {
                 toast.error('Invalid manager PIN');
                 return;
             }
 
-            await invoke('perform_day_end');
-            toast.success('Day-end completed successfully. All transactions moved to history.');
+            if (pendingAction === 'day-start') {
+                await invoke('perform_day_start');
+                toast.success('Day-start completed successfully.');
+                await fetchBusinessDayStatus(); // Refresh status from backend
+                router.push('/login?dayStart=true');
+            } else if (pendingAction === 'day-end') {
+                await invoke('perform_day_end');
+                toast.success('Day-end completed successfully. All transactions moved to history.');
+                setBusinessDayOpen(false);
+                await fetchBusinessDayStatus();
+            }
+
             setPinDialogOpen(false);
+            setPendingAction(null);
         } catch (error) {
-            toast.error('Failed to perform day-end: ' + error);
+            toast.error(`Failed to perform ${pendingAction}: ` + error);
         } finally {
             setLoading(false);
         }
@@ -78,33 +118,40 @@ export default function ManagerDashboardPage() {
             icon: Settings,
             path: "/manager/dev-settings",
             color: "bg-gray-500"
+        },
+        {
+            title: "Perform Day Start",
+            description: "Complete start-of-day operations",
+            icon: Sun,
+            action: handleDayStart,
+            color: "bg-yellow-500",
+            disabled: businessDayOpen
+        },
+        {
+            title: "Perform Day End",
+            description: "Complete end-of-day operations",
+            icon: Moon,
+            action: handleDayEnd,
+            color: "bg-indigo-500",
+            disabled: !businessDayOpen
         }
     ];
 
     return (
         <ManagerLayout>
             <div className="flex flex-col h-full gap-6">
-                
-                {/* Day End Button */}
-                <div className="flex justify-end">
-                    <Button onClick={handleDayEnd} disabled={loading} className="bg-indigo-600 hover:bg-indigo-700">
-                        <Moon className="w-4 h-4 mr-2" />
-                        {loading ? 'Processing...' : 'Perform Day End'}
-                    </Button>
-                </div>
-
                 {/* Module Grid */}
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-6">
                     {modules.map((module) => {
                         const Icon = module.icon;
                         return (
                             <Card
-                                key={module.path}
-                                className="cursor-pointer hover:shadow-lg ctive:shadow-md transition-shadow touch-target"
-                                onClick={() => router.push(module.path)}
+                                key={module.path || module.title}
+                                className={`cursor-pointer hover:shadow-lg active:shadow-md transition-shadow touch-target ${module.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                onClick={() => !module.disabled && (module.action ? module.action() : router.push(module.path!))}
                             >
                                 <CardHeader>
-                                    <div className={`w-12 h-12 rounded-lg ${module.color} flex items-center justify-center mb-4`}>
+                                    <div className={`w-12 h-12 rounded-lg ${module.color} flex items-center justify-center mb-4 ${module.disabled ? 'opacity-50' : ''}`}>
                                         <Icon className="h-6 w-6 text-white" />
                                     </div>
                                     <CardTitle className="text-xl">{module.title}</CardTitle>
@@ -121,6 +168,25 @@ export default function ManagerDashboardPage() {
                 onOpenChange={setPinDialogOpen}
                 onConfirm={handlePinConfirm}
             />
+
+            <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            {pendingAction === 'day-start' ? 'Start Business Day' : 'End Business Day'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {pendingAction === 'day-start'
+                                ? 'Are you sure you want to start a new business day? This will enable transaction processing.'
+                                : 'Are you sure you want to end the business day? This will move all transactions to history and disable transaction processing.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleConfirmAction}>Confirm</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </ManagerLayout>
     );
 }

@@ -16,13 +16,14 @@ import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { generateReceiptText, mapTransactionToReceiptDataFromState } from "@/lib/receipt";
 import { calculateVATSummary, extractBeneficiaryInfo } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Percent } from "lucide-react";
+import { Percent, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function CashierPage() {
 
-    const { currentUser, cart, getCartTotal, clearCart, createTransaction, discountCodes, calculateDiscount, calculateItemVATBreakdown } = usePOS();
+    const { currentUser, cart, getCartTotal, clearCart, createTransaction, discountCodes, calculateDiscount, calculateItemVATBreakdown, businessDayOpen, fetchBusinessDayStatus, logout } = usePOS();
     const [ paymentOpen, setPaymentOpen ]  = useState(false)
     const [ cardPaymentOpen, setCardPaymentOpen ]  = useState(false)
     const [ cardPaymentData, setCardPaymentData ]  = useState<CardPaymentData | null>(null)
@@ -38,6 +39,10 @@ export default function CashierPage() {
     const subtotal = getCartTotal();
     const discountAmount = calculateDiscount(cart);
     const total = subtotal - discountAmount;
+
+    useEffect(() => {
+        fetchBusinessDayStatus();
+    }, [fetchBusinessDayStatus]);
 
     const handlePaymentComplete = async (method: PaymentMethod, change: number) => {
         // If card payment, show card payment modal first
@@ -120,6 +125,23 @@ export default function CashierPage() {
 
     return (
         <AppLayout>
+            {!businessDayOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+                    <Alert className="max-w-md bg-white border-red-200">
+                        <AlertCircle className="h-6 w-6 text-red-600" />
+                        <AlertDescription className="text-base font-medium mt-2">
+                            Business day is closed. Please contact a manager to start the business day before processing transactions.
+                        </AlertDescription>
+                        <Button
+                            onClick={logout}
+                            variant="outline"
+                            className="mt-4 w-full"
+                        >
+                            Logout
+                        </Button>
+                    </Alert>
+                </div>
+            )}
             {paymentOpen ? (
                 <div className="flex flex-col h-full min-h-0 gap-4 relative">
                     {isProcessing && (
@@ -152,6 +174,7 @@ export default function CashierPage() {
                             size="lg"
                             onClick={() => setCartOpen(!cartOpen)}
                             className="h-12 px-4"
+                            disabled={!businessDayOpen}
                         >
                             Cart ({cart.length})
                         </Button>
@@ -160,7 +183,7 @@ export default function CashierPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 flex-1 min-h-0 relative">
                         {/* Products Section */}
                         <div className="lg:col-span-3 overflow-y-auto min-h-0">
-                            <ProductGrid/>
+                            <ProductGrid disabled={!businessDayOpen}/>
                         </div>
 
                         {/* Order Section - Side panel on desktop, drawer on mobile */}

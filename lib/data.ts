@@ -117,6 +117,16 @@
     }
   }
 
+  export async function getCurrentTransactionDetails(invoiceNo: number) {
+    try {
+      const data = await invoke('get_current_transaction_details', { invoiceNo });
+      return data;
+    } catch (error) {
+      console.error('Error fetching current transaction details:', error);
+      throw error;
+    }
+  }
+
   export async function voidTransaction(data: VoidTransactionRequest): Promise<number> {
     try {
       const result = await invoke<number>('void_transaction', { data });

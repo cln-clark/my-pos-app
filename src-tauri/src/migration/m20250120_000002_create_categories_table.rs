@@ -43,7 +43,6 @@ impl MigrationTrait for Migration {
                                 ('ADD', 'Add-ons'),
                                 ('DES', 'Desserts'),
                                 ('BRK', 'Breakfast'),
-                                ('FEE', 'Fees');
                                 ").await?;
                                 
         Ok(())

@@ -4,19 +4,25 @@ import { usePOS } from "@/lib/context";
 import { Button } from "@/components/ui/button";
 import { useRouter, usePathname } from "next/navigation";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function ManagerLayout({ children }: { children: React.ReactNode }) {
-    const { managerAuth, setManagerAuth } = usePOS();
+    const { managerAuth, managerAuthSource, setManagerAuth } = usePOS();
     const router = useRouter();
     const pathname = usePathname();
     const [currentTime, setCurrentTime] = useState(new Date());
     const [exitDialogOpen, setExitDialogOpen] = useState(false);
+    const isExitingRef = useRef(false);
 
     const handleBack = () => {
         router.push('/manager');
+    };
+
+    const handleBackToMain = () => {
+        setManagerAuth(null);
+        router.push('/');
     };
 
     const handleExitToCashier = () => {
@@ -24,9 +30,10 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
     };
 
     const confirmExitToCashier = () => {
-        setManagerAuth(null);
+        isExitingRef.current = true;
         setExitDialogOpen(false);
         router.push('/cashier');
+        setManagerAuth(null);
     };
 
     const getPageTitle = () => {
@@ -51,8 +58,8 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
     }, []);
 
     useEffect(() => {
-        if (!managerAuth) {
-            router.push('/cashier');
+        if (!managerAuth && !isExitingRef.current) {
+            router.push('/');
         }
     }, [managerAuth, router]);
 
@@ -68,16 +75,14 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
             {/* Kiosk Header */}
             <header className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-4">
-                    {showBackButton && (
-                        <Button
-                            variant="outline"
-                            onClick={handleBack}
-                            className="h-12 px-4 text-slate-900 touch-target font-medium"
-                        >
-                            <ArrowLeft className="h-5 w-5" />
-                            Back
-                        </Button>
-                    )}
+                    <Button
+                        variant="outline"
+                        onClick={pathname === '/manager' ? handleBackToMain : handleBack}
+                        className="h-12 px-4 text-slate-900 touch-target font-medium"
+                    >
+                        <ArrowLeft className="h-5 w-5" />
+                        Back
+                    </Button>
                     <div>
                         <h1 className="text-2xl font-bold">POS {pageTitle}</h1>
                         <p className="text-sm text-slate-400">Manager: {managerAuth.name} | Terminal No. 1</p>
@@ -92,14 +97,16 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
                             {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </div>
                     </div>
-                    <Button
-                        variant="outline"
-                        onClick={handleExitToCashier}
-                        className="h-12 px-6 text-slate-900 touch-target font-medium"
-                    >
-                        <ArrowRight className="h-4 w-4 mr-2" />
-                        Exit to Cashier
-                    </Button>
+                    {managerAuthSource === 'override' && (
+                        <Button
+                            variant="outline"
+                            onClick={handleExitToCashier}
+                            className="h-12 px-6 text-slate-900 touch-target font-medium"
+                        >
+                            <ArrowRight className="h-4 w-4 mr-2" />
+                            Exit to Cashier
+                        </Button>
+                    )}
                 </div>
             </header>
             <main className="flex-1 h-full p-6 overflow-auto">

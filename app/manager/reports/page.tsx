@@ -24,14 +24,32 @@ export default function ReportsPage() {
 
     setLoading(true);
     try {
+      // Convert dates from YYYY-MM-DD to M/D/YYYY format to match database
+      const formatDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US');
+      };
+
+      const formattedStartDate = formatDate(startDate);
+      const formattedEndDate = formatDate(endDate);
+
+      console.log('Populating temp tables with:', { start_date: formattedStartDate, end_date: formattedEndDate });
       await invoke('populate_temp_tables', {
-        data: { start_date: startDate, end_date: endDate }
+        data: { start_date: formattedStartDate, end_date: formattedEndDate }
       });
-      setPopulated(true);
-      toast.success('Tables populated successfully');
-      await fetchTransactions();
+      const fetchedTransactions = await fetchTransactions();
+      console.log('Fetched transactions:', fetchedTransactions.length);
+      // Only set populated if transactions were found
+      if (fetchedTransactions.length > 0) {
+        setPopulated(true);
+        toast.success('Tables populated successfully');
+      } else {
+        setPopulated(false);
+        toast.error('No transactions found for the selected date range');
+      }
     } catch (error) {
       toast.error('Failed to populate tables: ' + error);
+      setPopulated(false);
     } finally {
       setLoading(false);
     }
@@ -40,16 +58,17 @@ export default function ReportsPage() {
   const fetchTransactions = async () => {
     setLoading(true);
     try {
-      const now = new Date();
-      const businessDate = now.toLocaleDateString('en-US');
+      // Fetch from temp tables without date filter since they already contain the date range
       const result = await invoke<[any[], number]>('get_transaction_history', {
-        businessDate,
+        businessDate: '', // Empty string to skip date filter
         page: 1,
-        pageSize: 100,
+        pageSize: 1000,
       });
       setTransactions(result[0]);
+      return result[0];
     } catch (error) {
       toast.error('Failed to fetch transactions: ' + error);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -119,7 +138,7 @@ export default function ReportsPage() {
               {loading ? 'Loading...' : 'Generate Report'}
             </Button>
             {populated && (
-              <Button onClick={handleExportCSV} variant="outline">
+              <Button onClick={handleExportCSV} variant="outline" disabled={transactions.length === 0}>
                 <Download className="w-4 h-4 mr-2" />
                 Export CSV
               </Button>
@@ -163,6 +182,13 @@ export default function ReportsPage() {
                 ))}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {populated && transactions.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground">
+            <Search className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+            <p className="text-sm">No transactions exist for the selected date range</p>
           </div>
         )}
 

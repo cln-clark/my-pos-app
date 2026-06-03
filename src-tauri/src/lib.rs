@@ -27,11 +27,14 @@ pub fn run() {
       commands::void_transaction,
       commands::unvoid_transaction,
       commands::exchange_transaction,
+      commands::get_business_day_status,
+      commands::perform_day_start,
       commands::perform_day_end,
       commands::populate_temp_tables,
       commands::clear_temp_tables,
       commands::get_transaction_history,
-      commands::get_transaction_details
+      commands::get_current_transactions,
+      commands::get_current_transaction_details
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

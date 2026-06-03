@@ -56,9 +56,7 @@ impl MigrationTrait for Migration {
                             ('Milkshake','DES-MS',70.00,999,6,'Chocolate or vanilla shake'),
 
                             ('Egg Sandwich','BRK-EG',45.00,999,7,'Egg sandwich on toasted bread'),
-                            ('Pancake Stack','BRK-PAN',65.00,999,7,'3-piece pancake with syrup'),
-
-                            ('Takeout Bag Fee','FEE-BAG',5.00,999,8,'Optional packaging charge');
+                            ('Pancake Stack','BRK-PAN',65.00,999,7,'3-piece pancake with syrup');
                             ").await?;
             
         Ok(())

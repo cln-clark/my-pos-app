@@ -6,7 +6,11 @@ import { Button } from "../ui/button";
 import { useState, useMemo } from "react";
 import { usePOS } from "@/lib/context";
 
-export function ProductGrid() {
+interface ProductGridProps {
+    disabled?: boolean;
+}
+
+export function ProductGrid({ disabled = false }: ProductGridProps) {
 
     const { products, addToCart } = usePOS();
     const [searchQuery, setSearchQuery] = useState("");
@@ -33,6 +37,7 @@ export function ProductGrid() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="h-12 text-base"
+                    disabled={disabled}
                 />
                 <div className="flex gap-2 overflow-x-auto pb-2">
                     {categories.map((category) => (
@@ -40,7 +45,8 @@ export function ProductGrid() {
                         key={category}
                         variant={selectedCategory === category ? 'default' : 'outline'}
                         size="default"
-                        onClick={() => setSelectedCategory(category)}
+                        onClick={() => !disabled && setSelectedCategory(category)}
+                        disabled={disabled}
                         className="whitespace-nowrap h-10 active:scale-95 transition-transform"
                         >
                         {category}
@@ -54,8 +60,8 @@ export function ProductGrid() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                     {   filteredProducts.map((product) => (
                         <Card   key={`${product.id}-${product.sku}`}
-                                onClick={(e) => { if (product.stock > 0) addToCart(product, 1)}}
-                                className={`border border-slate-200 p-3 cursor-pointer transition-all active:scale-95 flex flex-col ${product.stock === 0 ? 'opacity-50 cursor-not-allowed' : 'active:border-blue-500'}`}
+                                onClick={(e) => { if (!disabled && product.stock > 0) addToCart(product, 1)}}
+                                className={`border border-slate-200 p-3 cursor-pointer transition-all active:scale-95 flex flex-col ${disabled || product.stock === 0 ? 'opacity-50 cursor-not-allowed' : 'active:border-blue-500'}`}
                                 >
                                 {/* Product Info */}
                                 <div className="text-center flex flex-col flex-1">

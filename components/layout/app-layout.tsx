@@ -165,7 +165,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             email: user.email,
                             role: { id: user.role_id, name: 'Manager' },
                             pin: user.pin,
-                        });
+                        }, 'override');
 
                         setManagerAuthError('');
                         setManagerAuthOpen(false);

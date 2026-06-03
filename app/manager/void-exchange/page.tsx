@@ -21,6 +21,7 @@ import { ManagerLayout } from "@/components/layout/manager-layout";
 import { VoidReasonDialog } from "@/components/pos/void-reason-dialog";
 import { PinConfirmationDialog } from "@/components/pos/pin-confirmation-dialog";
 import { ExchangeModal } from "@/components/pos/exchange-modal";
+import { TransactionDetailDrawer } from "@/components/pos/transaction-detail-drawer";
 import { TransactionHistoryResponse, UserResponse } from "@/lib/types";
 
 
@@ -33,6 +34,7 @@ export default function VoidRefundPage() {
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [exchangeModalOpen, setExchangeModalOpen] = useState(false);
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionHistoryResponse | null>(null);
   const [pendingAction, setPendingAction] = useState<'void' | 'unvoid' | null>(null);
 
@@ -45,11 +47,13 @@ export default function VoidRefundPage() {
         const date = new Date(filterDate);
         businessDate = date.toLocaleDateString('en-US');
       }
-      const [data, count] = await invoke<[TransactionHistoryResponse[], number]>('get_transaction_history', {
+      console.log('Fetching current transactions with businessDate:', businessDate);
+      const [data, count] = await invoke<[TransactionHistoryResponse[], number]>('get_current_transactions', {
         businessDate,
         page: 1,
         pageSize: 100,
       });
+      console.log('Fetched transactions:', data.length, 'Total count:', count);
       setTransactions(data);
     } catch (error) {
       toast.error('Failed to fetch transactions: ' + error);
@@ -113,10 +117,14 @@ export default function VoidRefundPage() {
     if (!selectedTransaction) return;
 
     try {
+      // Get manager user code from the validated manager
+      const users = await invoke<UserResponse[]>('get_users');
+      const manager = users.find((u) => u.role_id === 2);
+
       await invoke('void_transaction', {
         data: {
-          original_transaction_no: selectedTransaction.invoice_no,
-          voided_by_user_code: '1', // TODO: Use actual manager user code
+          original_transaction_no: selectedTransaction.transaction_no,
+          voided_by_user_code: manager?.id.toString() || '1',
           void_reason: reason,
           company_code: 1,
           store_code: 1,
@@ -141,6 +149,11 @@ export default function VoidRefundPage() {
   const handleExchange = (tx: TransactionHistoryResponse) => {
     setSelectedTransaction(tx);
     setExchangeModalOpen(true);
+  };
+
+  const handleViewDetails = (tx: TransactionHistoryResponse) => {
+    setSelectedTransaction(tx);
+    setDetailDrawerOpen(true);
   };
 
   return (
@@ -212,9 +225,6 @@ export default function VoidRefundPage() {
                       <p className="text-xs text-muted-foreground">Total Transactions</p>
                       <p className="text-lg font-bold">{transactions.length}</p>
                     </div>
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <DollarSign className="h-4 w-4 text-blue-600" />
-                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -263,9 +273,6 @@ export default function VoidRefundPage() {
                           .toFixed(2)}
                       </p>
                     </div>
-                    <div className="p-2 bg-purple-100 rounded-lg">
-                      <DollarSign className="h-4 w-4 text-purple-600" />
-                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -313,7 +320,11 @@ export default function VoidRefundPage() {
                       </TableHeader>
                       <TableBody>
                         {filteredTransactions.map((tx) => (
-                          <TableRow key={`${tx.invoice_no}-${tx.is_voided}`}>
+                          <TableRow
+                            key={`${tx.invoice_no}-${tx.is_voided}`}
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => handleViewDetails(tx)}
+                          >
                             <TableCell className="font-medium whitespace-nowrap">{tx.invoice_no}</TableCell>
                             <TableCell className="whitespace-nowrap">{tx.transaction_date}</TableCell>
                             <TableCell className="whitespace-nowrap">{tx.transaction_time}</TableCell>
@@ -337,8 +348,9 @@ export default function VoidRefundPage() {
                                   <Button
                                     size="sm"
                                     variant="destructive"
-                                    onClick={() => handleVoid(tx)}
+                                    onClick={(e) => { e.stopPropagation(); handleVoid(tx); }}
                                     className="h-8 px-2"
+                                    title="Void Transaction"
                                   >
                                     <Ban className="h-3 w-3" />
                                   </Button>
@@ -347,8 +359,9 @@ export default function VoidRefundPage() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => handleUnvoid(tx)}
+                                    onClick={(e) => { e.stopPropagation(); handleUnvoid(tx); }}
                                     className="h-8 px-2"
+                                    title="Unvoid Transaction"
                                   >
                                     <RotateCcw className="h-3 w-3" />
                                   </Button>
@@ -356,8 +369,9 @@ export default function VoidRefundPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleExchange(tx)}
+                                  onClick={(e) => { e.stopPropagation(); handleExchange(tx); }}
                                   className="h-8 px-2"
+                                  title="Exchange"
                                 >
                                   <ArrowRightLeft className="h-3 w-3" />
                                 </Button>
@@ -390,6 +404,13 @@ export default function VoidRefundPage() {
       onOpenChange={setPinDialogOpen}
       onConfirm={handlePinConfirm}
     />
+    {selectedTransaction && (
+      <TransactionDetailDrawer
+        open={detailDrawerOpen}
+        onOpenChange={setDetailDrawerOpen}
+        invoiceNo={selectedTransaction.invoice_no}
+      />
+    )}
     {selectedTransaction && (
       <ExchangeModal
         open={exchangeModalOpen}

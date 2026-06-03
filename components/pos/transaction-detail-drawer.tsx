@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { X, Receipt, Ban, Printer } from "lucide-react";
-import { getTransactionDetails } from '@/lib/data';
+import { getCurrentTransactionDetails } from '@/lib/data';
 import { generateReceiptFromTransaction, TransactionDetailResponse } from "@/lib/receipt";
 import { generateReceiptHTML } from "@/lib/utils";
 import { toast } from 'sonner';
@@ -28,7 +28,7 @@ export function TransactionDetailDrawer({ open, onOpenChange, invoiceNo }: Trans
   const fetchTransactionDetails = async () => {
     setLoading(true);
     try {
-      const data = await getTransactionDetails(invoiceNo) as TransactionDetailResponse;
+      const data = await getCurrentTransactionDetails(invoiceNo) as TransactionDetailResponse;
       setTransaction(data);
     } catch (error) {
       toast.error('Failed to fetch transaction details: ' + error);

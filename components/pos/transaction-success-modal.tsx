@@ -12,16 +12,16 @@ interface TransactionSuccessModalProps {
   paymentMethod: string;
 }
 
-export function TransactionSuccessModal({ 
-  open, 
-  onOpenChange, 
-  transactionId, 
-  total, 
-  paymentMethod 
+export function TransactionSuccessModal({
+  open,
+  onOpenChange,
+  transactionId,
+  total,
+  paymentMethod
 }: TransactionSuccessModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-[400px]" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <div className="flex flex-col items-center gap-4 py-6">
             <div className="h-20 w-20 rounded-full bg-green-100 flex items-center justify-center">

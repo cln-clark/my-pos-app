@@ -1,151 +1,94 @@
-    'use client';
+'use client';
 
-    import React, { useState, useEffect } from 'react';
-    import { usePOS } from "@/lib/context";
-    import { useRouter } from 'next/navigation';
-    import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-    import { Alert, AlertAction,AlertDescription, AlertTitle } from "@/components/ui/alert"
-    import { Input } from '@/components/ui/input';
-    import { Button } from '@/components/ui/button';
-    import { AlertCircle } from 'lucide-react';
-    import { Numpad } from '@/components/ui/numpad';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from '@/components/ui/button';
+import { ShoppingCart, Settings, ArrowLeft } from 'lucide-react';
+import { ManagerPinDialog } from "@/components/pos/manager-pin-dialog";
+import { usePOS } from "@/lib/context";
 
-    export default function LoginPage() {
-      
-      const router = useRouter();
-      const [error, setError] = useState<string>('');
-      const [userId, setUserId] = useState<string>('');
-      const [pin, setPin] = useState<string>('');
-      const {login} = usePOS();
-      const [loading, setLoading] = useState<boolean>(false);
-      const [currentTime, setCurrentTime] = useState<Date>(new Date());
+export default function MainPage() {
+  const router = useRouter();
+  const { setManagerAuth } = usePOS();
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
 
-      useEffect(() => {
-        const timer = setInterval(() => {
-          setCurrentTime(new Date());
-        }, 1000);
-        return () => clearInterval(timer);
-      }, []);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-      const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
+  const handleSalesClick = () => {
+    router.push('/login?from=main');
+  };
 
-        if(!userId || !pin) {
-          setError('Please enter User ID and PIN');
-          setLoading(false);
-          return;
-        }
+  const handleBackOfficeClick = () => {
+    setPinDialogOpen(true);
+  };
 
-        const success = await login(parseInt(userId), pin);
+  const handlePinSuccess = (manager: any) => {
+    setManagerAuth(manager, 'main');
+    setPinDialogOpen(false);
+    router.push('/manager');
+  };
 
-        if(success) {
-          router.push('/cashier');
-        } else {
-          setError('Invalid User ID or PIN. Please try again.');
-          setPin('');
-        }
+  return (
+    <div className="flex min-h-screen w-full items-center justify-center p-4 md:p-10 bg-muted/40 relative">
+      <div className="absolute top-4 left-4 text-sm text-muted-foreground" suppressHydrationWarning>
+        {currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        <br />
+        {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+      </div>
 
-        setLoading(false);
-
-      };
-
-      const handlePinPadClick = (value: string) => {
-        if (pin.length < 4) {
-          setPin(pin + value);
-        }
-      };
-
-      // Auto-submit when PIN reaches 4 digits
-      useEffect(() => {
-        if (pin.length === 4 && userId) {
-          handleLogin(new Event('submit') as any);
-        }
-      }, [pin, userId]);
-
-      const handleUserIdPadClick = (value: string) => {
-        if (userId.length < 10) {
-          setUserId(userId + value);
-        }
-      };
-
-      const handlePinPadClear = () => {
-        setPin('');
-      };
-
-      const handleUserIdPadClear = () => {
-        setUserId('');
-      };
-
-      const handlePinPadBackspace = () => {
-        setPin(pin.slice(0, -1));
-      };
-
-      const handleUserIdPadBackspace = () => {
-        setUserId(userId.slice(0, -1));
-      };
-
-
-    return (
-      <div className="flex min-h-screen w-full items-center justify-center p-4 md:p-10 bg-muted/40 relative">
-        <div className="absolute top-4 left-4 text-sm text-muted-foreground" suppressHydrationWarning>
-          {currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          <br />
-          {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+      <div className="flex flex-col items-center gap-8 w-full max-w-4xl">
+        <div className="text-center space-y-2">
+          <h1 className="text-5xl font-bold">FASTPOS</h1>
+          <p className="text-xl text-muted-foreground">Point of Sale System</p>
         </div>
-        <div className="flex w-full max-w-6xl flex-col lg:flex-row gap-6">
-          {/* Login Form - Left Side */}
-          <Card className="flex-1">
-            <CardHeader className="space-y-2 pb-6">
-              <CardTitle className="text-4xl font-bold">FASTPOS</CardTitle>
-              <CardDescription className="text-base">Point of Sale System</CardDescription>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-3xl">
+          {/* Sales Card */}
+          <Card
+            className="cursor-pointer hover:shadow-xl transition-all hover:scale-105 active:scale-95"
+            onClick={handleSalesClick}
+          >
+            <CardHeader className="space-y-4 pb-6">
+              <div className="w-20 h-20 rounded-full bg-blue-500 flex items-center justify-center mx-auto">
+                <ShoppingCart className="h-10 w-10 text-white" />
+              </div>
+              <CardTitle className="text-3xl text-center">Sales</CardTitle>
+              <CardDescription className="text-center text-base">
+                Process transactions and manage sales
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <form onSubmit={handleLogin} className="space-y-6">
-                { error && (
-                <Alert variant="destructive">
-                  <AlertCircle className='w-5 h-5'></AlertCircle>
-                  <AlertDescription className="text-base">{error}</AlertDescription>
-                </Alert>
-                )}
-
-                <div className='space-y-3'>
-                  <label htmlFor="userId" className='text-base font-semibold'>User ID</label>
-                  <Input id="userId"
-                        type="text"
-                        placeholder='Enter User ID'
-                        value={userId}
-                        onChange={(e) => setUserId(e.target.value)}
-                        maxLength={10}
-                        className="mt-2 h-14 text-lg text-center [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
-                  />
-                </div>
-
-                <div className='space-y-3'>
-                  <label htmlFor="pin" className='text-base font-semibold'>Enter PIN</label>
-                  <Input id="pin"
-                        type="password"
-                        placeholder='Enter PIN'
-                        value={pin}
-                        onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        maxLength={4}
-                        className="mt-2 h-14 text-lg text-center [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
-                  />
-                </div>
-
-              </form>
-            </CardContent>
           </Card>
 
-          {/* PIN Pad - Right Side */}
-          <Numpad
-            onDigitClick={handlePinPadClick}
-            onClear={handlePinPadClear}
-            onBackspace={handlePinPadBackspace}
-            disabled={!userId}
-          />
+          {/* Back Office Card */}
+          <Card
+            className="cursor-pointer hover:shadow-xl transition-all hover:scale-105 active:scale-95"
+            onClick={handleBackOfficeClick}
+          >
+            <CardHeader className="space-y-4 pb-6">
+              <div className="w-20 h-20 rounded-full bg-purple-500 flex items-center justify-center mx-auto">
+                <Settings className="h-10 w-10 text-white" />
+              </div>
+              <CardTitle className="text-3xl text-center">Back Office</CardTitle>
+              <CardDescription className="text-center text-base">
+                Manager access and system administration
+              </CardDescription>
+            </CardHeader>
+          </Card>
         </div>
       </div>
-    );
-  }
+
+      <ManagerPinDialog
+        open={pinDialogOpen}
+        onOpenChange={setPinDialogOpen}
+        onSuccess={handlePinSuccess}
+      />
+    </div>
+  );
+}

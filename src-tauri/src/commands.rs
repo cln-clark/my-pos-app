@@ -1,4 +1,4 @@
-    use crate::entity::{role, user, product, category, discount_code, pos_zx_reading, crr_txn_head, crr_txn_dtl, crr_zx_reading, temp_txn_head, temp_txn_dtl, temp_zx_reading, hst_txn_head, hst_txn_dtl, hst_zx_reading};
+    use crate::entity::{role, user, product, category, discount_code, crr_txn_head, crr_txn_dtl, crr_zx_reading, temp_txn_head, temp_txn_dtl, temp_zx_reading};
     use crate::AppState;
     use sea_orm::ConnectionTrait;
     use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, ActiveModelTrait, Set, Statement};
@@ -488,8 +488,9 @@
         let db = &state.db;
 
         // Delete the VOID record from CRR_ZX_READING
+        // The VOID record has void_tx_num pointing to the original transaction
         crr_zx_reading::Entity::delete_many()
-            .filter(crr_zx_reading::Column::TransactionNo.eq(data.transaction_no))
+            .filter(crr_zx_reading::Column::VoidTxNum.eq(data.transaction_no))
             .filter(crr_zx_reading::Column::TransactionType.eq("VOID"))
             .exec(&**db)
             .await
@@ -499,28 +500,252 @@
     }
 
     #[tauri::command]
-    pub async fn perform_day_end(state: State<'_, AppState>) -> Result<(), String> {
-        use sea_orm::{Statement, DbBackend, FromQueryResult};
+    pub async fn get_business_day_status(state: State<'_, AppState>) -> Result<bool, String> {
         let db = &state.db;
 
-        // Move all data from CRR_TXN_HDR to HST_TXN_HDR
+        // Check if the day start marker exists (transaction_no = 0)
+        // If it exists, business day is open; otherwise, it's closed
+        let marker = crr_txn_head::Entity::find()
+            .filter(crr_txn_head::Column::TransactionNo.eq(0))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(marker.is_some())
+    }
+
+    #[tauri::command]
+    pub async fn get_current_transactions(
+        business_date: String,
+        page: Option<i32>,
+        page_size: Option<i32>,
+        state: State<'_, AppState>
+    ) -> Result<(Vec<TransactionHistoryResponse>, i64), String> {
+        use sea_orm::{FromQueryResult, Statement, DbBackend};
+
+        let db = &state.db;
+
+        let page = page.unwrap_or(1);
+        let page_size = page_size.unwrap_or(25);
+        let offset = (page - 1) * page_size;
+
+        // Get total count
+        let count_stmt = if business_date.is_empty() {
+            Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"
+                SELECT COUNT(*) as count
+                FROM CRR_TXN_HDR th
+                WHERE th.transaction_no != 0
+                "#,
+                vec![],
+            )
+        } else {
+            Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"
+                SELECT COUNT(*) as count
+                FROM CRR_TXN_HDR th
+                WHERE th.business_date = ? AND th.transaction_no != 0
+                "#,
+                vec![business_date.clone().into()],
+            )
+        };
+
+        #[derive(Debug, FromQueryResult)]
+        struct CountResult {
+            count: i64,
+        }
+
+        let count_result = CountResult::find_by_statement(count_stmt)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Failed to get count")?;
+
+        #[derive(Debug, FromQueryResult)]
+        struct TransactionResult {
+            transaction_no: i32,
+            invoice_no: i32,
+            transaction_date: String,
+            transaction_time: String,
+            business_date: String,
+            cashier_name: String,
+            payment_method: String,
+            total: f64,
+            cash_amount_paid: Option<f64>,
+            change_given: Option<f64>,
+            is_voided: Option<bool>,
+            voided_by_name: Option<String>,
+            void_reason: Option<String>,
+            void_date: Option<String>,
+            void_time: Option<String>,
+        }
+
+        let stmt = if business_date.is_empty() {
+            Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"
+                SELECT
+                    th.transaction_no,
+                    th.invoice_no,
+                    th.transaction_date,
+                    th.transaction_time,
+                    th.business_date,
+                    u.name AS cashier_name,
+                    pt.name AS payment_method,
+                    th.total,
+                    th.cash_amount_paid,
+                    th.change_given,
+                    EXISTS (
+                        SELECT 1 FROM CRR_ZX_READING zxr2
+                        WHERE zxr2.void_tx_num = th.transaction_no AND zxr2.transaction_type = 'VOID'
+                    ) AS is_voided,
+                    vu.name AS voided_by_name,
+                    zxr.void_reason,
+                    zxr.date_stamp AS void_date,
+                    zxr.time_stamp AS void_time
+                FROM CRR_TXN_HDR th
+                JOIN users u ON th.cashier_user_code = u.id
+                JOIN payment_type pt ON th.payment_id = pt.id
+                LEFT JOIN CRR_ZX_READING zxr ON zxr.void_tx_num = th.transaction_no AND zxr.transaction_type = 'VOID'
+                LEFT JOIN users vu ON zxr.voided_by_user_code = vu.id
+                WHERE th.transaction_no != 0
+                ORDER BY th.transaction_date DESC, th.transaction_time DESC
+                LIMIT ? OFFSET ?
+                "#,
+                vec![page_size.into(), offset.into()],
+            )
+        } else {
+            Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"
+                SELECT
+                    th.transaction_no,
+                    th.invoice_no,
+                    th.transaction_date,
+                    th.transaction_time,
+                    th.business_date,
+                    u.name AS cashier_name,
+                    pt.name AS payment_method,
+                    th.total,
+                    th.cash_amount_paid,
+                    th.change_given,
+                    EXISTS (
+                        SELECT 1 FROM CRR_ZX_READING zxr2
+                        WHERE zxr2.void_tx_num = th.transaction_no AND zxr2.transaction_type = 'VOID'
+                    ) AS is_voided,
+                    vu.name AS voided_by_name,
+                    zxr.void_reason,
+                    zxr.date_stamp AS void_date,
+                    zxr.time_stamp AS void_time
+                FROM CRR_TXN_HDR th
+                JOIN users u ON th.cashier_user_code = u.id
+                JOIN payment_type pt ON th.payment_id = pt.id
+                LEFT JOIN CRR_ZX_READING zxr ON zxr.void_tx_num = th.transaction_no AND zxr.transaction_type = 'VOID'
+                LEFT JOIN users vu ON zxr.voided_by_user_code = vu.id
+                WHERE th.business_date = ? AND th.transaction_no != 0
+                ORDER BY th.transaction_date DESC, th.transaction_time DESC
+                LIMIT ? OFFSET ?
+                "#,
+                vec![business_date.into(), page_size.into(), offset.into()],
+            )
+        };
+
+        let transactions = TransactionResult::find_by_statement(stmt)
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let responses: Vec<TransactionHistoryResponse> = transactions
+            .into_iter()
+            .map(|t| TransactionHistoryResponse {
+                transaction_no: t.transaction_no,
+                invoice_no: t.invoice_no,
+                transaction_date: t.transaction_date,
+                transaction_time: t.transaction_time,
+                business_date: t.business_date,
+                cashier_name: t.cashier_name,
+                payment_method: t.payment_method,
+                total: t.total,
+                cash_amount_paid: t.cash_amount_paid,
+                change_given: t.change_given,
+                is_voided: t.is_voided.unwrap_or(false),
+                voided_by_name: t.voided_by_name,
+                void_reason: t.void_reason,
+                void_date: t.void_date,
+                void_time: t.void_time,
+            })
+            .collect();
+
+        Ok((responses, count_result.count))
+    }
+
+    #[tauri::command]
+    pub async fn perform_day_start(state: State<'_, AppState>) -> Result<(), String> {
+        let db = &state.db;
+
+        // Delete any existing day start marker first
+        crr_txn_head::Entity::delete_many()
+            .filter(crr_txn_head::Column::TransactionNo.eq(0))
+            .exec(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Insert a marker transaction to indicate business day is open
+        // This is a dummy transaction with transaction_no = 0 to mark day start
+        let now = chrono::Utc::now();
+        let business_date = now.format("%Y-%m-%d").to_string();
+        let transaction_time = now.format("%H:%M:%S").to_string();
+
+        let marker_txn = crr_txn_head::ActiveModel {
+            company_code: Set(1),
+            store_code: Set(1),
+            terminal_id: Set(1),
+            transaction_no: Set(0), // Special marker: 0 = day start marker
+            cashier_user_code: Set(2), // Use manager ID (valid user)
+            invoice_no: Set(0),
+            business_date: Set(business_date.clone()),
+            transaction_date: Set(business_date),
+            transaction_time: Set(transaction_time),
+            txn_mode_code: Set(1),
+            cash_amount_paid: Set(None),
+            encoded_by_user_code: Set(2), // Use manager ID (valid user)
+            printed_by_user_code: Set(2), // Use manager ID (valid user)
+            total: Set(0.0),
+            payment_id: Set(1),
+            change_given: Set(None),
+            ..Default::default()
+        };
+
+        marker_txn.insert(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub async fn perform_day_end(state: State<'_, AppState>) -> Result<(), String> {
+        use sea_orm::{Statement, DbBackend};
+        let db = &state.db;
+
+        // Move all data from CRR_TXN_HDR to HST_TXN_HDR (excluding day start marker)
         let move_hdr_stmt = Statement::from_string(
             DbBackend::Sqlite,
-            "INSERT INTO HST_TXN_HDR SELECT * FROM CRR_TXN_HDR".to_owned(),
+            "INSERT INTO HST_TXN_HDR SELECT * FROM CRR_TXN_HDR WHERE transaction_no != 0".to_owned(),
         );
         db.execute(move_hdr_stmt).await.map_err(|e| e.to_string())?;
 
-        // Move all data from CRR_TXN_DTL to HST_TXN_DTL
+        // Move all data from CRR_TXN_DTL to HST_TXN_DTL (excluding day start marker details)
         let move_dtl_stmt = Statement::from_string(
             DbBackend::Sqlite,
-            "INSERT INTO HST_TXN_DTL SELECT * FROM CRR_TXN_DTL".to_owned(),
+            "INSERT INTO HST_TXN_DTL SELECT * FROM CRR_TXN_DTL WHERE transaction_no != 0".to_owned(),
         );
         db.execute(move_dtl_stmt).await.map_err(|e| e.to_string())?;
 
-        // Move all data from CRR_ZX_READING to HST_ZX_READING
+        // Move all data from CRR_ZX_READING to HST_ZX_READING (excluding day start marker)
         let move_zx_stmt = Statement::from_string(
             DbBackend::Sqlite,
-            "INSERT INTO HST_ZX_READING SELECT * FROM CRR_ZX_READING".to_owned(),
+            "INSERT INTO HST_ZX_READING SELECT * FROM CRR_ZX_READING WHERE transaction_no != 0".to_owned(),
         );
         db.execute(move_zx_stmt).await.map_err(|e| e.to_string())?;
 
@@ -555,6 +780,19 @@
         temp_txn_dtl::Entity::delete_many().exec(&**db).await.map_err(|e| e.to_string())?;
         temp_zx_reading::Entity::delete_many().exec(&**db).await.map_err(|e| e.to_string())?;
 
+        // Check what dates exist in HST_TXN_HDR
+        let check_dates_stmt = Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT DISTINCT business_date FROM HST_TXN_HDR LIMIT 10".to_string(),
+        );
+        let dates_result = db.query_all(check_dates_stmt).await.map_err(|e| e.to_string())?;
+        println!("Available dates in HST_TXN_HDR:");
+        for row in dates_result {
+            if let Some(date) = row.try_get_by_index::<String>(0).ok() {
+                println!("  - {}", date);
+            }
+        }
+
         // Populate TEMP_TXN_HDR from HST_TXN_HDR within date range
         let move_hdr_stmt = Statement::from_string(
             DbBackend::Sqlite,
@@ -563,7 +801,8 @@
                 data.start_date, data.end_date
             ),
         );
-        db.execute(move_hdr_stmt).await.map_err(|e| e.to_string())?;
+        let hdr_result = db.execute(move_hdr_stmt).await.map_err(|e| e.to_string())?;
+        println!("Inserted {} rows into TEMP_TXN_HDR for date range {} to {}", hdr_result.rows_affected(), data.start_date, data.end_date);
 
         // Populate TEMP_TXN_DTL from HST_TXN_DTL (linked by invoice_no)
         let move_dtl_stmt = Statement::from_string(
@@ -582,6 +821,15 @@
             ),
         );
         db.execute(move_zx_stmt).await.map_err(|e| e.to_string())?;
+
+        // Also populate void records (linked by void_tx_num)
+        let move_void_stmt = Statement::from_string(
+            DbBackend::Sqlite,
+            format!(
+                "INSERT INTO TEMP_ZX_READING SELECT * FROM HST_ZX_READING WHERE transaction_type = 'VOID' AND void_tx_num IN (SELECT transaction_no FROM TEMP_TXN_HDR)"
+            ),
+        );
+        db.execute(move_void_stmt).await.map_err(|e| e.to_string())?;
 
         Ok(())
     }
@@ -798,15 +1046,26 @@
         let offset = (page - 1) * page_size;
 
         // Get total count
-        let count_stmt = Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            r#"
-            SELECT COUNT(*) as count
-            FROM TEMP_TXN_HDR th
-            WHERE th.business_date = ?
-            "#,
-            vec![business_date.clone().into()],
-        );
+        let count_stmt = if business_date.is_empty() {
+            Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"
+                SELECT COUNT(*) as count
+                FROM TEMP_TXN_HDR th
+                "#,
+                vec![],
+            )
+        } else {
+            Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"
+                SELECT COUNT(*) as count
+                FROM TEMP_TXN_HDR th
+                WHERE th.business_date = ?
+                "#,
+                vec![business_date.clone().into()],
+            )
+        };
 
         #[derive(Debug, FromQueryResult)]
         struct CountResult {
@@ -838,36 +1097,68 @@
             void_time: Option<String>,
         }
 
-        let stmt = Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            r#"
-            SELECT
-                th.transaction_no,
-                th.invoice_no,
-                th.transaction_date,
-                th.transaction_time,
-                th.business_date,
-                u.name AS cashier_name,
-                pt.name AS payment_method,
-                th.total,
-                th.cash_amount_paid,
-                th.change_given,
-                zxr.transaction_type = 'VOID' AS is_voided,
-                vu.name AS voided_by_name,
-                zxr.void_reason,
-                CASE WHEN zxr.transaction_type = 'VOID' THEN zxr.date_stamp ELSE NULL END AS void_date,
-                CASE WHEN zxr.transaction_type = 'VOID' THEN zxr.time_stamp ELSE NULL END AS void_time
-            FROM TEMP_TXN_HDR th
-            JOIN users u ON th.cashier_user_code = u.id
-            JOIN payment_type pt ON th.payment_id = pt.id
-            LEFT JOIN TEMP_ZX_READING zxr ON zxr.transaction_no = th.transaction_no
-            LEFT JOIN users vu ON zxr.voided_by_user_code = vu.id
-            WHERE th.business_date = ?
-            ORDER BY th.transaction_date DESC, th.transaction_time DESC
-            LIMIT ? OFFSET ?
-            "#,
-            vec![business_date.into(), page_size.into(), offset.into()],
-        );
+        let stmt = if business_date.is_empty() {
+            Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"
+                SELECT
+                    th.transaction_no,
+                    th.invoice_no,
+                    th.transaction_date,
+                    th.transaction_time,
+                    th.business_date,
+                    u.name AS cashier_name,
+                    pt.name AS payment_method,
+                    th.total,
+                    th.cash_amount_paid,
+                    th.change_given,
+                    zxr.transaction_type = 'VOID' AS is_voided,
+                    vu.name AS voided_by_name,
+                    zxr.void_reason,
+                    CASE WHEN zxr.transaction_type = 'VOID' THEN zxr.date_stamp ELSE NULL END AS void_date,
+                    CASE WHEN zxr.transaction_type = 'VOID' THEN zxr.time_stamp ELSE NULL END AS void_time
+                FROM TEMP_TXN_HDR th
+                JOIN users u ON th.cashier_user_code = u.id
+                JOIN payment_type pt ON th.payment_id = pt.id
+                LEFT JOIN TEMP_ZX_READING zxr ON zxr.void_tx_num = th.transaction_no
+                LEFT JOIN users vu ON zxr.voided_by_user_code = vu.id
+                ORDER BY th.transaction_date DESC, th.transaction_time DESC
+                LIMIT ? OFFSET ?
+                "#,
+                vec![page_size.into(), offset.into()],
+            )
+        } else {
+            Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"
+                SELECT
+                    th.transaction_no,
+                    th.invoice_no,
+                    th.transaction_date,
+                    th.transaction_time,
+                    th.business_date,
+                    u.name AS cashier_name,
+                    pt.name AS payment_method,
+                    th.total,
+                    th.cash_amount_paid,
+                    th.change_given,
+                    zxr.transaction_type = 'VOID' AS is_voided,
+                    vu.name AS voided_by_name,
+                    zxr.void_reason,
+                    CASE WHEN zxr.transaction_type = 'VOID' THEN zxr.date_stamp ELSE NULL END AS void_date,
+                    CASE WHEN zxr.transaction_type = 'VOID' THEN zxr.time_stamp ELSE NULL END AS void_time
+                FROM TEMP_TXN_HDR th
+                JOIN users u ON th.cashier_user_code = u.id
+                JOIN payment_type pt ON th.payment_id = pt.id
+                LEFT JOIN TEMP_ZX_READING zxr ON zxr.void_tx_num = th.transaction_no
+                LEFT JOIN users vu ON zxr.voided_by_user_code = vu.id
+                WHERE th.business_date = ?
+                ORDER BY th.transaction_date DESC, th.transaction_time DESC
+                LIMIT ? OFFSET ?
+                "#,
+                vec![business_date.into(), page_size.into(), offset.into()],
+            )
+        };
 
         let transactions = TransactionResult::find_by_statement(stmt)
             .all(&**db)
@@ -947,7 +1238,7 @@
     }
 
     #[tauri::command]
-    pub async fn get_transaction_details(
+    pub async fn get_current_transaction_details(
         invoice_no: i32,
         state: State<'_, AppState>
     ) -> Result<TransactionDetailResponse, String> {
@@ -955,7 +1246,7 @@
 
         let db = &state.db;
 
-        // Fetch transaction header
+        // Fetch transaction header from CRR_TXN_HDR
         let header_stmt = Statement::from_sql_and_values(
             DbBackend::Sqlite,
             r#"
@@ -970,7 +1261,7 @@
                 th.total,
                 th.cash_amount_paid,
                 th.change_given
-            FROM TEMP_TXN_HDR th
+            FROM CRR_TXN_HDR th
             JOIN users u ON th.cashier_user_code = u.id
             JOIN payment_type pt ON th.payment_id = pt.id
             WHERE th.invoice_no = ?
@@ -998,7 +1289,7 @@
             .map_err(|e| e.to_string())?
             .ok_or("Transaction not found")?;
 
-        // Fetch transaction items
+        // Fetch transaction items from CRR_TXN_DTL
         let items_stmt = Statement::from_sql_and_values(
             DbBackend::Sqlite,
             r#"
@@ -1015,7 +1306,7 @@
                 less_vat,
                 vat_exempt_amt,
                 zero_rated_amt
-            FROM TEMP_TXN_DTL
+            FROM CRR_TXN_DTL
             WHERE invoice_no = ?
             ORDER BY line_sequence
             "#,
@@ -1077,18 +1368,21 @@
             .map(|i| i.disc_amt.to_f64().unwrap_or(0.0))
             .sum();
 
-        // Fetch void info
+        // Fetch void info from CRR_ZX_READING
         let void_stmt = Statement::from_sql_and_values(
             DbBackend::Sqlite,
             r#"
             SELECT
-                zxr.transaction_type = 'VOID' AS is_voided,
+                EXISTS (
+                    SELECT 1 FROM CRR_ZX_READING zxr2
+                    WHERE zxr2.void_tx_num = th.transaction_no AND zxr2.transaction_type = 'VOID'
+                ) AS is_voided,
                 vu.name AS voided_by_name,
                 zxr.void_reason,
-                CASE WHEN zxr.transaction_type = 'VOID' THEN zxr.date_stamp ELSE NULL END AS void_date,
-                CASE WHEN zxr.transaction_type = 'VOID' THEN zxr.time_stamp ELSE NULL END AS void_time
-            FROM TEMP_TXN_HDR th
-            LEFT JOIN TEMP_ZX_READING zxr ON zxr.transaction_no = th.transaction_no
+                zxr.date_stamp AS void_date,
+                zxr.time_stamp AS void_time
+            FROM CRR_TXN_HDR th
+            LEFT JOIN CRR_ZX_READING zxr ON zxr.void_tx_num = th.transaction_no AND zxr.transaction_type = 'VOID'
             LEFT JOIN users vu ON zxr.voided_by_user_code = vu.id
             WHERE th.invoice_no = ?
             "#,
@@ -1163,35 +1457,39 @@
     pub async fn void_transaction(state: State<'_, AppState>, data: VoidTransactionRequest) -> Result<i32, String> {
         let db = &state.db;
 
-        let max_txn = pos_zx_reading::Entity::find()
-            .filter(pos_zx_reading::Column::CompanyCode.eq(data.company_code))
-            .filter(pos_zx_reading::Column::StoreCode.eq(data.store_code))
-            .filter(pos_zx_reading::Column::TerminalId.eq(data.terminal_id))
-            .filter(pos_zx_reading::Column::BusinessDate.eq(&data.business_date))
-            .all(&**db)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        let new_transaction_no = max_txn.iter().map(|t| t.transaction_no).max().unwrap_or(0) + 1;
-
-        let original_txn = pos_zx_reading::Entity::find()
-            .filter(pos_zx_reading::Column::CompanyCode.eq(data.company_code))
-            .filter(pos_zx_reading::Column::StoreCode.eq(data.store_code))
-            .filter(pos_zx_reading::Column::TerminalId.eq(data.terminal_id))
-            .filter(pos_zx_reading::Column::TransactionNo.eq(data.original_transaction_no))
-            .filter(pos_zx_reading::Column::BusinessDate.eq(&data.business_date))
+        // Find the original transaction in CRR_ZX_READING
+        let original_txn = crr_zx_reading::Entity::find()
+            .filter(crr_zx_reading::Column::CompanyCode.eq(data.company_code))
+            .filter(crr_zx_reading::Column::StoreCode.eq(data.store_code))
+            .filter(crr_zx_reading::Column::TerminalId.eq(data.terminal_id))
+            .filter(crr_zx_reading::Column::TransactionNo.eq(data.original_transaction_no))
+            .filter(crr_zx_reading::Column::BusinessDate.eq(&data.business_date))
             .one(&**db)
             .await
             .map_err(|e| e.to_string())?;
 
         if let Some(original) = original_txn {
-            let void_zx_reading = pos_zx_reading::ActiveModel {
+            // Get the next transaction number
+            let max_txn = crr_zx_reading::Entity::find()
+                .filter(crr_zx_reading::Column::CompanyCode.eq(data.company_code))
+                .filter(crr_zx_reading::Column::StoreCode.eq(data.store_code))
+                .filter(crr_zx_reading::Column::TerminalId.eq(data.terminal_id))
+                .filter(crr_zx_reading::Column::BusinessDate.eq(&data.business_date))
+                .all(&**db)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            let new_transaction_no = max_txn.iter().map(|t| t.transaction_no).max().unwrap_or(0) + 1;
+
+            // Create VOID record in CRR_ZX_READING
+            let void_zx_reading = crr_zx_reading::ActiveModel {
                 company_code: Set(data.company_code),
                 store_code: Set(data.store_code),
                 terminal_id: Set(data.terminal_id),
                 transaction_no: Set(new_transaction_no),
                 business_date: Set(data.business_date),
                 payment_type: Set(original.payment_type),
+                invoice_number: Set(original.invoice_number),
                 amount: Set(-original.amount),
                 discount_pct: Set(original.discount_pct),
                 local_tax: Set(-original.local_tax),
@@ -1213,11 +1511,10 @@
                 sr_pwd_total_amount: Set(-original.sr_pwd_total_amount),
                 sr_pwd_count: Set(original.sr_pwd_count),
                 cashier_user_code: Set(data.voided_by_user_code.clone()),
-                date_stamp: Set(chrono::Utc::now().format("%Y-%m-%d").to_string()),
-                time_stamp: Set(chrono::Utc::now().format("%H:%M:%S").to_string()),
+                date_stamp: Set(chrono::Local::now().format("%-m/%-d/%Y").to_string()),
+                time_stamp: Set(chrono::Local::now().format("%I:%M %p").to_string()),
                 voided_by_user_code: Set(data.voided_by_user_code),
                 void_reason: Set(data.void_reason),
-                invoice_number: Set(original.invoice_number),
                 ..Default::default()
             };
 
