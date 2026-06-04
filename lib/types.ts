@@ -17,8 +17,6 @@ export interface Product {
   categoryId?: number;
   category?: string;
   categoryCode?: string;
-  stock: number;
-  description?: string;
 }
 
 export interface Category {
@@ -263,14 +261,57 @@ export interface ProductResponse {
   name: string;
   price: number;
   category_id?: number;
-  stock: number;
-  description?: string;
+  recipe_cost: number;
+}
+
+export interface CreateProductRequest {
+  sku: string;
+  name: string;
+  price: number;
+  category_id?: number;
+}
+
+export interface UpdateProductRequest {
+  id: number;
+  sku: string;
+  name: string;
+  price: number;
+  category_id?: number;
 }
 
 export interface CategoryResponse {
   id: number;
   category_code: string;
   category_name: string;
+}
+
+export interface CreateCategoryRequest {
+  category_code: string;
+  category_name: string;
+}
+
+export interface UpdateCategoryRequest {
+  id: number;
+  category_code: string;
+  category_name: string;
+}
+
+export interface CsvProductRow {
+  sku: string;
+  name: string;
+  price: number;
+  category_code: string;
+  category_name: string;
+}
+
+export interface BatchImportRequest {
+  products: CsvProductRow[];
+}
+
+export interface BatchImportResponse {
+  success_count: number;
+  error_count: number;
+  errors: string[];
 }
 
 export interface DiscountCodeResponse {
@@ -306,4 +347,143 @@ export interface TransactionHistoryResponse {
   void_reason?: string | null;
   void_date?: string | null;
   void_time?: string | null;
+}
+
+// Inventory Management Types
+export interface UnitMaster {
+  id: number;
+  company_id: number;
+  unit_code: string;
+  unit_description: string;
+}
+
+export interface UnitMasterResponse {
+  id: number;
+  company_id: number;
+  unit_code: string;
+  unit_description: string;
+}
+
+export interface CreateUnitMasterRequest {
+  unit_code: string;
+  unit_description: string;
+}
+
+export interface IngredientMasterFile {
+  id: number;
+  company_id: number;
+  ingr_code: string;
+  description: string;
+  cost_price: number;
+  min_stock_lvl: number;
+  max_stock_lvl: number;
+  usage_unit_id: number | null;
+  base_stock_qty: number;
+  local_cost: number;
+  conversion_rate: number;
+}
+
+export interface IngredientMasterFileResponse {
+  id: number;
+  company_id: number;
+  ingr_code: string;
+  description: string;
+  cost_price: number;
+  min_stock_lvl: number;
+  max_stock_lvl: number;
+  usage_unit_id: number | null;
+  base_stock_qty: number;
+  local_cost: number;
+  conversion_rate: number;
+}
+
+export interface CreateIngredientRequest {
+  description: string;
+  cost_price: number;
+  min_stock_lvl: number;
+  max_stock_lvl: number;
+  usage_unit_id: number | null;
+  base_stock_qty: number;
+  local_cost: number;
+  conversion_rate: number;
+}
+
+export interface UpdateIngredientStockRequest {
+  ingredient_id: number;
+  quantity_change: number;
+}
+
+export interface UpdateIngredientRequest {
+  id: number;
+  description: string;
+  cost_price: number;
+  min_stock_lvl: number;
+  max_stock_lvl: number;
+  usage_unit_id: number | null;
+  base_stock_qty: number;
+  local_cost: number;
+  conversion_rate: number;
+}
+
+export interface ConversionFile {
+  id: number;
+  company_id: number;
+  unit_to_convert: string;
+  convert_to: string;
+  rate: number;
+  spare: string | null;
+}
+
+export interface ConversionFileResponse {
+  id: number;
+  company_id: number;
+  unit_to_convert: string;
+  convert_to: string;
+  rate: number;
+  spare: string | null;
+}
+
+export interface CreateConversionRequest {
+  unit_to_convert: string;
+  convert_to: string;
+  rate: number;
+}
+
+export interface ProductsRecipe {
+  id: number;
+  product_id: number;
+  ingredient_id: number;
+  usage_qty: number;
+  usage_uom_code: string;
+  actual_usage: number;
+  cost: number;
+}
+
+export interface ProductsRecipeResponse {
+  id: number;
+  product_id: number;
+  ingredient_id: number;
+  usage_qty: number;
+  usage_uom_code: string;
+  actual_usage: number;
+  cost: number;
+}
+
+export interface CreateRecipeRequest {
+  product_id: number;
+  ingredient_id: number;
+  usage_qty: number;
+  usage_uom_code: string;
+  actual_usage: number;
+  cost: number;
+}
+
+export interface UpdateRecipeRequest {
+  id: number;
+  product_id: number;
+  ingredient_id: number;
+  usage_qty: number;
+  usage_uom_code: string;
+  actual_usage: number;
+  cost: number;
 }

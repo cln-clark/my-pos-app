@@ -31,19 +31,7 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
-            .await?;
-
-            let db = manager.get_connection();
-            db.execute_unprepared("
-                                INSERT OR IGNORE INTO categories (category_code, category_name) VALUES
-                                ('BEV', 'Beverages'),
-                                ('FOO', 'Food'),
-                                ('MEAL', 'Meals'),
-                                ('SID', 'Sides'),
-                                ('ADD', 'Add-ons'),
-                                ('DES', 'Desserts'),
-                                ('BRK', 'Breakfast'),
-                                ").await?;
+            .await?;    
                                 
         Ok(())
     }

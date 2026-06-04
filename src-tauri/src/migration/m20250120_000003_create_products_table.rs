@@ -16,8 +16,6 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Products::Name).string().not_null())
                     .col(ColumnDef::new(Products::Price).double().not_null())
                     .col(ColumnDef::new(Products::CategoryId).integer())
-                    .col(ColumnDef::new(Products::Stock).integer().not_null())
-                    .col(ColumnDef::new(Products::Description).string())
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-products-category_id")
@@ -29,36 +27,6 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        let db = manager.get_connection();
-        db.execute_unprepared("
-                            INSERT OR IGNORE INTO products (name, sku, price, stock, category_id, description) VALUES
-                            ('Hot Coffee','DRK-HC',50.00,999,1,'Fresh brewed hot coffee'),
-                            ('Iced Coffee','DRK-IC',65.00,999,1,'Chilled iced coffee'),
-                            ('Soft Drinks','DRK-SD',40.00,999,1,'Coke / Sprite / Soda'),
-
-                            ('Classic Burger','BUR-CL',70.00,999,2,'Beef patty with basic toppings'),
-                            ('Cheeseburger','BUR-CH',85.00,999,2,'Burger with cheese slice'),
-                            ('Chicken Sandwich','SAN-CH',90.00,999,2,'Crispy chicken sandwich'),
-
-                            ('Burger Combo Meal','COMBO-BUR',120.00,999,3,'Burger + fries + drink'),
-                            ('Chicken Meal','COMBO-CH',130.00,999,3,'Chicken sandwich + fries + drink'),
-                            ('Rice Meal','MEAL-RICE',110.00,999,3,'Chicken or beef with rice'),
-
-                            ('French Fries (Small)','SID-FRY-S',35.00,999,4,'Crispy small fries'),
-                            ('French Fries (Large)','SID-FRY-L',60.00,999,4,'Crispy large fries'),
-                            ('Onion Rings','SID-ONR',55.00,999,4,'Golden fried onion rings'),
-
-                            ('Extra Cheese','ADD-CHS',15.00,999,5,'Add cheese to any item'),
-                            ('Extra Patty','ADD-PAT',35.00,999,5,'Extra beef patty'),
-                            ('Extra Sauce','ADD-SAU',10.00,999,5,'Ketchup, mayo, BBQ, etc.'),
-
-                            ('Ice Cream Cone','DES-IC',25.00,999,6,'Soft serve ice cream'),
-                            ('Milkshake','DES-MS',70.00,999,6,'Chocolate or vanilla shake'),
-
-                            ('Egg Sandwich','BRK-EG',45.00,999,7,'Egg sandwich on toasted bread'),
-                            ('Pancake Stack','BRK-PAN',65.00,999,7,'3-piece pancake with syrup');
-                            ").await?;
-            
         Ok(())
     }
 
@@ -77,8 +45,6 @@ enum Products {
     Name,
     Price,
     CategoryId,
-    Stock,
-    Description,
 }
             
 #[derive(DeriveIden)]

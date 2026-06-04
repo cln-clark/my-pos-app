@@ -34,7 +34,29 @@ pub fn run() {
       commands::clear_temp_tables,
       commands::get_transaction_history,
       commands::get_current_transactions,
-      commands::get_current_transaction_details
+      commands::get_current_transaction_details,
+      commands::get_units,
+      commands::create_unit_master,
+      commands::get_ingredients,
+      commands::create_ingredient,
+      commands::update_ingredient_stock,
+      commands::update_ingredient,
+      commands::delete_ingredient,
+      commands::get_conversions,
+      commands::create_conversion,
+      commands::get_product_recipe,
+      commands::create_recipe,
+      commands::delete_recipe,
+      commands::update_recipe,
+      commands::recalculate_product_cost,
+      commands::update_product_price_from_cost,
+      commands::create_product,
+      commands::update_product,
+      commands::delete_product,
+      commands::create_category,
+      commands::update_category,
+      commands::delete_category,
+      commands::batch_import_products
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

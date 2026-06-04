@@ -15,6 +15,8 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
     const [currentTime, setCurrentTime] = useState(new Date());
     const [exitDialogOpen, setExitDialogOpen] = useState(false);
     const isExitingRef = useRef(false);
+    const inactivityTimer = useRef<NodeJS.Timeout | null>(null);
+    const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
     const handleBack = () => {
         router.push('/manager');
@@ -36,6 +38,11 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
         setManagerAuth(null);
     };
 
+    const handleLogout = () => {
+        setManagerAuth(null);
+        router.push('/');
+    };
+
     const getPageTitle = () => {
         const path = pathname.replace('/manager/', '');
         const segments = path.split('/').filter(Boolean);
@@ -50,6 +57,15 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
             .join(' ');
     };
 
+    const resetInactivityTimer = () => {
+        if (inactivityTimer.current) {
+            clearTimeout(inactivityTimer.current);
+        }
+        inactivityTimer.current = setTimeout(() => {
+            handleLogout();
+        }, INACTIVITY_TIMEOUT);
+    };
+
     useEffect(() => {
         const timer = setInterval(() => {
             setCurrentTime(new Date());
@@ -62,6 +78,26 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
             router.push('/');
         }
     }, [managerAuth, router]);
+
+    useEffect(() => {
+        resetInactivityTimer();
+
+        const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+        const handleActivity = () => resetInactivityTimer();
+
+        events.forEach(event => {
+            window.addEventListener(event, handleActivity);
+        });
+
+        return () => {
+            if (inactivityTimer.current) {
+                clearTimeout(inactivityTimer.current);
+            }
+            events.forEach(event => {
+                window.removeEventListener(event, handleActivity);
+            });
+        };
+    }, []);
 
     if (!managerAuth) {
         return null;

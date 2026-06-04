@@ -12,9 +12,7 @@ pub struct Model {
     pub name: String,
     pub price: f64,
     pub category_id: Option<i32>,
-    pub stock: i32,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub description: Option<String>,
+    pub recipe_cost: f64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

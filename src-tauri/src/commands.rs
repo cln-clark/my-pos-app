@@ -1,7 +1,7 @@
-    use crate::entity::{role, user, product, category, discount_code, crr_txn_head, crr_txn_dtl, crr_zx_reading, temp_txn_head, temp_txn_dtl, temp_zx_reading};
+    use crate::entity::{role, user, product, category, discount_code, crr_txn_head, crr_txn_dtl, crr_zx_reading, temp_txn_head, temp_txn_dtl, temp_zx_reading, unit_master, ingredient_master_file, conversion_file, products_recipe};
     use crate::AppState;
     use sea_orm::ConnectionTrait;
-    use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, ActiveModelTrait, Set, Statement};
+    use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, ActiveModelTrait, Set, Statement, TransactionTrait};
     use serde::{Deserialize, Serialize};
     use tauri::State;
     use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
@@ -29,8 +29,7 @@
         pub name: String,
         pub price: f64,
         pub category_id: Option<i32>,
-        pub stock: i32,
-        pub description: Option<String>,
+        pub recipe_cost: f64,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -220,7 +219,7 @@
             .all(&**db)
             .await
             .map_err(|e| e.to_string())?;
-        
+
         let product_responses: Vec<ProductResponse> = products
             .into_iter()
             .map(|p| ProductResponse {
@@ -229,12 +228,222 @@
                 name: p.name,
                 price: p.price,
                 category_id: p.category_id,
-                stock: p.stock,
-                description: p.description,
+                recipe_cost: p.recipe_cost,
             })
             .collect();
 
         Ok(product_responses)
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CreateProductRequest {
+        pub sku: String,
+        pub name: String,
+        pub price: f64,
+        pub category_id: Option<i32>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UpdateProductRequest {
+        pub id: i32,
+        pub sku: String,
+        pub name: String,
+        pub price: f64,
+        pub category_id: Option<i32>,
+    }
+
+    #[tauri::command]
+    pub async fn create_product(state: State<'_, AppState>, data: CreateProductRequest) -> Result<ProductResponse, String> {
+        let db = &state.db;
+
+        let new_product = product::ActiveModel {
+            sku: Set(data.sku),
+            name: Set(data.name),
+            price: Set(data.price),
+            category_id: Set(data.category_id),
+            recipe_cost: Set(0.0),
+            ..Default::default()
+        };
+
+        let product = new_product.insert(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(ProductResponse {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            price: product.price,
+            category_id: product.category_id,
+            recipe_cost: product.recipe_cost,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn update_product(state: State<'_, AppState>, data: UpdateProductRequest) -> Result<ProductResponse, String> {
+        let db = &state.db;
+
+        let product = product::Entity::find_by_id(data.id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Product not found".to_string())?;
+
+        let mut product: product::ActiveModel = product.into();
+        product.sku = Set(data.sku);
+        product.name = Set(data.name);
+        product.price = Set(data.price);
+        product.category_id = Set(data.category_id);
+
+        let product = product.update(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(ProductResponse {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            price: product.price,
+            category_id: product.category_id,
+            recipe_cost: product.recipe_cost,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn delete_product(state: State<'_, AppState>, product_id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        product::Entity::delete_by_id(product_id)
+            .exec(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CsvProductRow {
+        pub sku: String,
+        pub name: String,
+        pub price: f64,
+        pub category_code: String,
+        pub category_name: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct BatchImportRequest {
+        pub products: Vec<CsvProductRow>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct BatchImportResponse {
+        pub success_count: usize,
+        pub error_count: usize,
+        pub errors: Vec<String>,
+    }
+
+    #[tauri::command]
+    pub async fn batch_import_products(state: State<'_, AppState>, data: BatchImportRequest) -> Result<BatchImportResponse, String> {
+        let db = &state.db;
+        let mut success_count = 0;
+        let mut error_count = 0;
+        let mut errors = Vec::new();
+
+        // Use a transaction for data consistency
+        let txn = db.begin().await.map_err(|e| e.to_string())?;
+
+        // First, process all categories
+        let mut category_map: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
+
+        // Get existing categories
+        let existing_categories = category::Entity::find()
+            .all(&txn)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        for cat in existing_categories {
+            category_map.insert(cat.category_code.clone(), cat.id);
+        }
+
+        // Collect unique categories from CSV
+        let mut unique_categories: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        for row in &data.products {
+            unique_categories.insert(row.category_code.clone(), row.category_name.clone());
+        }
+
+        // Create new categories if they don't exist
+        for (category_code, category_name) in unique_categories {
+            if !category_map.contains_key(&category_code) {
+                let new_category = category::ActiveModel {
+                    category_code: Set(category_code.clone()),
+                    category_name: Set(category_name),
+                    ..Default::default()
+                };
+
+                let category = new_category.insert(&txn).await.map_err(|e| e.to_string())?;
+                category_map.insert(category_code, category.id);
+            }
+        }
+
+        // Now process products
+        for (index, row) in data.products.iter().enumerate() {
+            // Validate required fields
+            if row.sku.is_empty() || row.name.is_empty() || row.price <= 0.0 {
+                error_count += 1;
+                errors.push(format!("Row {}: Missing or invalid required fields", index + 1));
+                continue;
+            }
+
+            // Check if category exists
+            let category_id = match category_map.get(&row.category_code) {
+                Some(id) => Some(*id),
+                None => {
+                    error_count += 1;
+                    errors.push(format!("Row {}: Category '{}' not found", index + 1, row.category_code));
+                    continue;
+                }
+            };
+
+            // Check if SKU already exists
+            let existing_product = product::Entity::find()
+                .filter(product::Column::Sku.eq(&row.sku))
+                .one(&txn)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            if existing_product.is_some() {
+                error_count += 1;
+                errors.push(format!("Row {}: SKU '{}' already exists", index + 1, row.sku));
+                continue;
+            }
+
+            // Create product
+            let new_product = product::ActiveModel {
+                sku: Set(row.sku.clone()),
+                name: Set(row.name.clone()),
+                price: Set(row.price),
+                category_id: Set(category_id),
+                recipe_cost: Set(0.0),
+                ..Default::default()
+            };
+
+            match new_product.insert(&txn).await {
+                Ok(_) => success_count += 1,
+                Err(e) => {
+                    error_count += 1;
+                    errors.push(format!("Row {}: Failed to create product - {}", index + 1, e));
+                }
+            }
+        }
+
+        // Commit or rollback transaction
+        if error_count > 0 && success_count == 0 {
+            txn.rollback().await.map_err(|e| e.to_string())?;
+        } else {
+            txn.commit().await.map_err(|e| e.to_string())?;
+        }
+
+        Ok(BatchImportResponse {
+            success_count,
+            error_count,
+            errors,
+        })
     }
 
     #[tauri::command]
@@ -256,6 +465,73 @@
             .collect();
 
         Ok(category_responses)
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CreateCategoryRequest {
+        pub category_code: String,
+        pub category_name: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UpdateCategoryRequest {
+        pub id: i32,
+        pub category_code: String,
+        pub category_name: String,
+    }
+
+    #[tauri::command]
+    pub async fn create_category(state: State<'_, AppState>, data: CreateCategoryRequest) -> Result<CategoryResponse, String> {
+        let db = &state.db;
+
+        let new_category = category::ActiveModel {
+            category_code: Set(data.category_code),
+            category_name: Set(data.category_name),
+            ..Default::default()
+        };
+
+        let category = new_category.insert(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(CategoryResponse {
+            id: category.id,
+            category_code: category.category_code,
+            category_name: category.category_name,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn update_category(state: State<'_, AppState>, data: UpdateCategoryRequest) -> Result<CategoryResponse, String> {
+        let db = &state.db;
+
+        let category = category::Entity::find_by_id(data.id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Category not found".to_string())?;
+
+        let mut category: category::ActiveModel = category.into();
+        category.category_code = Set(data.category_code);
+        category.category_name = Set(data.category_name);
+
+        let category = category.update(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(CategoryResponse {
+            id: category.id,
+            category_code: category.category_code,
+            category_name: category.category_name,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn delete_category(state: State<'_, AppState>, category_id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        category::Entity::delete_by_id(category_id)
+            .exec(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -331,7 +607,71 @@
             None => 1,
         };
 
-        // Step 5 — Insert with transaction_no and invoice_no already set
+        // Step 5 — Check ingredient stock availability and deduct stock
+        for item in &transaction_data.items {
+            // Fetch product recipe
+            let recipes = products_recipe::Entity::find()
+                .filter(products_recipe::Column::ProductId.eq(item.product_id))
+                .all(&**db)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            if !recipes.is_empty() {
+                // Check stock for each ingredient in the recipe
+                for recipe in &recipes {
+                    let ingredient = ingredient_master_file::Entity::find()
+                        .filter(ingredient_master_file::Column::Id.eq(recipe.ingredient_id))
+                        .one(&**db)
+                        .await
+                        .map_err(|e| e.to_string())?
+                        .ok_or("Ingredient not found")?;
+
+                    let required_qty = (recipe.actual_usage * item.qty as f64) as i32;
+
+                    if ingredient.base_stock_qty < required_qty {
+                        return Err(format!(
+                            "Insufficient stock for ingredient: {} (required: {}, available: {})",
+                            ingredient.description, required_qty, ingredient.base_stock_qty
+                        ));
+                    }
+                }
+
+                // Deduct stock for each ingredient
+                for recipe in &recipes {
+                    let required_qty = (recipe.actual_usage * item.qty as f64) as i32;
+
+                    let ingredient = ingredient_master_file::Entity::find()
+                        .filter(ingredient_master_file::Column::Id.eq(recipe.ingredient_id))
+                        .one(&**db)
+                        .await
+                        .map_err(|e| e.to_string())?
+                        .ok_or("Ingredient not found")?;
+
+                    let description = ingredient.description.clone();
+                    let min_stock_lvl = ingredient.min_stock_lvl;
+                    let new_stock = ingredient.base_stock_qty - required_qty;
+
+                    let mut ingredient_active: ingredient_master_file::ActiveModel = ingredient.into();
+                    ingredient_active.base_stock_qty = Set(new_stock);
+
+                    ingredient_active
+                        .update(&**db)
+                        .await
+                        .map_err(|e| e.to_string())?;
+
+                    // Check for low stock alert
+                    if new_stock < min_stock_lvl {
+                        // Log low stock warning (could be enhanced to notify user)
+                        println!(
+                            "LOW STOCK ALERT: {} is below minimum level (current: {}, min: {})",
+                            description, new_stock, min_stock_lvl
+                        );
+                    }
+                }
+            }
+        }
+
+        // Step 6 — Insert with transaction_no and invoice_no already set
         let new_txn_head = crr_txn_head::ActiveModel {
             company_code: Set(transaction_data.company_code),
             store_code: Set(transaction_data.store_code),
@@ -1469,6 +1809,47 @@
             .map_err(|e| e.to_string())?;
 
         if let Some(original) = original_txn {
+            // Restore ingredient stock
+            let original_txn_details = crr_txn_dtl::Entity::find()
+                .filter(crr_txn_dtl::Column::TransactionNo.eq(data.original_transaction_no))
+                .filter(crr_txn_dtl::Column::BusinessDate.eq(&data.business_date))
+                .all(&**db)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            for item in original_txn_details {
+                // Fetch product recipe
+                let recipes = products_recipe::Entity::find()
+                    .filter(products_recipe::Column::ProductId.eq(item.product_id))
+                    .all(&**db)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                if !recipes.is_empty() {
+                    // Restore stock for each ingredient in the recipe
+                    for recipe in &recipes {
+                        let restore_qty = (recipe.actual_usage * item.qty as f64) as i32;
+
+                        let ingredient = ingredient_master_file::Entity::find()
+                            .filter(ingredient_master_file::Column::Id.eq(recipe.ingredient_id))
+                            .one(&**db)
+                            .await
+                            .map_err(|e| e.to_string())?
+                            .ok_or("Ingredient not found")?;
+
+                        let new_stock = ingredient.base_stock_qty + restore_qty;
+
+                        let mut ingredient_active: ingredient_master_file::ActiveModel = ingredient.into();
+                        ingredient_active.base_stock_qty = Set(new_stock);
+
+                        ingredient_active
+                            .update(&**db)
+                            .await
+                            .map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+
             // Get the next transaction number
             let max_txn = crr_zx_reading::Entity::find()
                 .filter(crr_zx_reading::Column::CompanyCode.eq(data.company_code))
@@ -1528,3 +1909,530 @@
             Err("Original transaction not found".to_string())
         }
     }
+
+    // Unit Management Commands
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UnitMasterResponse {
+        pub id: i32,
+        pub company_id: i32,
+        pub unit_code: String,
+        pub unit_description: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CreateUnitMasterRequest {
+        pub unit_code: String,
+        pub unit_description: String,
+    }
+
+    #[tauri::command]
+    pub async fn get_units(state: State<'_, AppState>) -> Result<Vec<UnitMasterResponse>, String> {
+        let db = &state.db;
+
+        let units = unit_master::Entity::find()
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let unit_responses: Vec<UnitMasterResponse> = units
+            .into_iter()
+            .map(|u| UnitMasterResponse {
+                id: u.id,
+                company_id: u.company_id,
+                unit_code: u.unit_code,
+                unit_description: u.unit_description,
+            })
+            .collect();
+
+        Ok(unit_responses)
+    }
+
+    #[tauri::command]
+    pub async fn create_unit_master(state: State<'_, AppState>, data: CreateUnitMasterRequest) -> Result<UnitMasterResponse, String> {
+        let db = &state.db;
+
+        let new_unit = unit_master::ActiveModel {
+            company_id: Set(1),
+            unit_code: Set(data.unit_code),
+            unit_description: Set(data.unit_description),
+            ..Default::default()
+        };
+
+        let result = new_unit
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(UnitMasterResponse {
+            id: result.id,
+            company_id: result.company_id,
+            unit_code: result.unit_code,
+            unit_description: result.unit_description,
+        })
+    }
+
+    // Ingredient Management Commands
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct IngredientMasterFileResponse {
+        pub id: i32,
+        pub company_id: i32,
+        pub ingr_code: String,
+        pub description: String,
+        pub cost_price: f64,
+        pub min_stock_lvl: i32,
+        pub max_stock_lvl: i32,
+        pub usage_unit_id: Option<i32>,
+        pub base_stock_qty: i32,
+        pub local_cost: f64,
+        pub conversion_rate: f64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CreateIngredientRequest {
+        pub description: String,
+        pub cost_price: f64,
+        pub min_stock_lvl: i32,
+        pub max_stock_lvl: i32,
+        pub usage_unit_id: Option<i32>,
+        pub base_stock_qty: i32,
+        pub local_cost: f64,
+        pub conversion_rate: f64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UpdateIngredientStockRequest {
+        pub ingredient_id: i32,
+        pub quantity_change: i32,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UpdateIngredientRequest {
+        pub id: i32,
+        pub description: String,
+        pub cost_price: f64,
+        pub min_stock_lvl: i32,
+        pub max_stock_lvl: i32,
+        pub usage_unit_id: Option<i32>,
+        pub base_stock_qty: i32,
+        pub local_cost: f64,
+        pub conversion_rate: f64,
+    }
+
+    #[tauri::command]
+    pub async fn get_ingredients(state: State<'_, AppState>) -> Result<Vec<IngredientMasterFileResponse>, String> {
+        let db = &state.db;
+
+        let ingredients = ingredient_master_file::Entity::find()
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let ingredient_responses: Vec<IngredientMasterFileResponse> = ingredients
+            .into_iter()
+            .map(|i| IngredientMasterFileResponse {
+                id: i.id,
+                company_id: i.company_id,
+                ingr_code: i.ingr_code,
+                description: i.description,
+                cost_price: i.cost_price,
+                min_stock_lvl: i.min_stock_lvl,
+                max_stock_lvl: i.max_stock_lvl,
+                usage_unit_id: i.usage_unit_id,
+                base_stock_qty: i.base_stock_qty,
+                local_cost: i.local_cost,
+                conversion_rate: i.conversion_rate,
+            })
+            .collect();
+
+        Ok(ingredient_responses)
+    }
+
+    #[tauri::command]
+    pub async fn create_ingredient(state: State<'_, AppState>, data: CreateIngredientRequest) -> Result<IngredientMasterFileResponse, String> {
+        let db = &state.db;
+
+        // Generate auto-generated ingredient code
+        let max_id = ingredient_master_file::Entity::find()
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|i| i.id)
+            .max()
+            .unwrap_or(0);
+
+        let ingr_code = format!("ING-{:03}", max_id + 1);
+
+        let new_ingredient = ingredient_master_file::ActiveModel {
+            company_id: Set(1),
+            ingr_code: Set(ingr_code),
+            description: Set(data.description),
+            cost_price: Set(data.cost_price),
+            min_stock_lvl: Set(data.min_stock_lvl),
+            max_stock_lvl: Set(data.max_stock_lvl),
+            usage_unit_id: Set(data.usage_unit_id),
+            base_stock_qty: Set(data.base_stock_qty),
+            local_cost: Set(data.local_cost),
+            conversion_rate: Set(data.conversion_rate),
+            ..Default::default()
+        };
+
+        let result = new_ingredient
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(IngredientMasterFileResponse {
+            id: result.id,
+            company_id: result.company_id,
+            ingr_code: result.ingr_code,
+            description: result.description,
+            cost_price: result.cost_price,
+            min_stock_lvl: result.min_stock_lvl,
+            max_stock_lvl: result.max_stock_lvl,
+            usage_unit_id: result.usage_unit_id,
+            base_stock_qty: result.base_stock_qty,
+            local_cost: result.local_cost,
+            conversion_rate: result.conversion_rate,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn update_ingredient_stock(state: State<'_, AppState>, data: UpdateIngredientStockRequest) -> Result<(), String> {
+        let db = &state.db;
+
+        let ingredient = ingredient_master_file::Entity::find()
+            .filter(ingredient_master_file::Column::Id.eq(data.ingredient_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Ingredient not found")?;
+
+        let new_stock = ingredient.base_stock_qty + data.quantity_change;
+
+        let mut ingredient_active: ingredient_master_file::ActiveModel = ingredient.into();
+        ingredient_active.base_stock_qty = Set(new_stock);
+
+        ingredient_active
+            .update(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub async fn update_ingredient(state: State<'_, AppState>, data: UpdateIngredientRequest) -> Result<IngredientMasterFileResponse, String> {
+        let db = &state.db;
+
+        let ingredient = ingredient_master_file::Entity::find()
+            .filter(ingredient_master_file::Column::Id.eq(data.id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Ingredient not found")?;
+
+        let mut ingredient_active: ingredient_master_file::ActiveModel = ingredient.into();
+        ingredient_active.description = Set(data.description);
+        ingredient_active.cost_price = Set(data.cost_price);
+        ingredient_active.min_stock_lvl = Set(data.min_stock_lvl);
+        ingredient_active.max_stock_lvl = Set(data.max_stock_lvl);
+        ingredient_active.usage_unit_id = Set(data.usage_unit_id);
+        ingredient_active.base_stock_qty = Set(data.base_stock_qty);
+        ingredient_active.local_cost = Set(data.local_cost);
+        ingredient_active.conversion_rate = Set(data.conversion_rate);
+
+        let result = ingredient_active
+            .update(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(IngredientMasterFileResponse {
+            id: result.id,
+            company_id: result.company_id,
+            ingr_code: result.ingr_code,
+            description: result.description,
+            cost_price: result.cost_price,
+            min_stock_lvl: result.min_stock_lvl,
+            max_stock_lvl: result.max_stock_lvl,
+            usage_unit_id: result.usage_unit_id,
+            base_stock_qty: result.base_stock_qty,
+            local_cost: result.local_cost,
+            conversion_rate: result.conversion_rate,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn delete_ingredient(state: State<'_, AppState>, ingredient_id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        ingredient_master_file::Entity::delete_by_id(ingredient_id)
+            .exec(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    // Conversion Management Commands
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct ConversionFileResponse {
+        pub id: i32,
+        pub company_id: i32,
+        pub unit_to_convert: String,
+        pub convert_to: String,
+        pub rate: f64,
+        pub spare: Option<String>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CreateConversionRequest {
+        pub unit_to_convert: String,
+        pub convert_to: String,
+        pub rate: f64,
+    }
+
+    #[tauri::command]
+    pub async fn get_conversions(state: State<'_, AppState>) -> Result<Vec<ConversionFileResponse>, String> {
+        let db = &state.db;
+
+        let conversions = conversion_file::Entity::find()
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let conversion_responses: Vec<ConversionFileResponse> = conversions
+            .into_iter()
+            .map(|c| ConversionFileResponse {
+                id: c.id,
+                company_id: c.company_id,
+                unit_to_convert: c.unit_to_convert,
+                convert_to: c.convert_to,
+                rate: c.rate,
+                spare: c.spare,
+            })
+            .collect();
+
+        Ok(conversion_responses)
+    }
+
+    #[tauri::command]
+    pub async fn create_conversion(state: State<'_, AppState>, data: CreateConversionRequest) -> Result<ConversionFileResponse, String> {
+        let db = &state.db;
+
+        let new_conversion = conversion_file::ActiveModel {
+            company_id: Set(1),
+            unit_to_convert: Set(data.unit_to_convert),
+            convert_to: Set(data.convert_to),
+            rate: Set(data.rate),
+            spare: Set(None),
+            ..Default::default()
+        };
+
+        let result = new_conversion
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(ConversionFileResponse {
+            id: result.id,
+            company_id: result.company_id,
+            unit_to_convert: result.unit_to_convert,
+            convert_to: result.convert_to,
+            rate: result.rate,
+            spare: result.spare,
+        })
+    }
+
+    // Recipe Management Commands
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct ProductsRecipeResponse {
+        pub id: i32,
+        pub product_id: i32,
+        pub ingredient_id: i32,
+        pub usage_qty: f64,
+        pub usage_uom_code: String,
+        pub actual_usage: f64,
+        pub cost: f64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CreateRecipeRequest {
+        pub product_id: i32,
+        pub ingredient_id: i32,
+        pub usage_qty: f64,
+        pub usage_uom_code: String,
+        pub actual_usage: f64,
+        pub cost: f64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UpdateRecipeRequest {
+        pub id: i32,
+        pub product_id: i32,
+        pub ingredient_id: i32,
+        pub usage_qty: f64,
+        pub usage_uom_code: String,
+        pub actual_usage: f64,
+        pub cost: f64,
+    }
+
+    #[tauri::command]
+    pub async fn get_product_recipe(state: State<'_, AppState>, product_id: i32) -> Result<Vec<ProductsRecipeResponse>, String> {
+        let db = &state.db;
+
+        let recipes = products_recipe::Entity::find()
+            .filter(products_recipe::Column::ProductId.eq(product_id))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let recipe_responses: Vec<ProductsRecipeResponse> = recipes
+            .into_iter()
+            .map(|r| ProductsRecipeResponse {
+                id: r.id,
+                product_id: r.product_id,
+                ingredient_id: r.ingredient_id,
+                usage_qty: r.usage_qty,
+                usage_uom_code: r.usage_uom_code,
+                actual_usage: r.actual_usage,
+                cost: r.cost,
+            })
+            .collect();
+
+        Ok(recipe_responses)
+    }
+
+    #[tauri::command]
+    pub async fn create_recipe(state: State<'_, AppState>, data: CreateRecipeRequest) -> Result<ProductsRecipeResponse, String> {
+        let db = &state.db;
+
+        let new_recipe = products_recipe::ActiveModel {
+            product_id: Set(data.product_id),
+            ingredient_id: Set(data.ingredient_id),
+            usage_qty: Set(data.usage_qty),
+            usage_uom_code: Set(data.usage_uom_code),
+            actual_usage: Set(data.actual_usage),
+            cost: Set(data.cost),
+            ..Default::default()
+        };
+
+        let result = new_recipe
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(ProductsRecipeResponse {
+            id: result.id,
+            product_id: result.product_id,
+            ingredient_id: result.ingredient_id,
+            usage_qty: result.usage_qty,
+            usage_uom_code: result.usage_uom_code,
+            actual_usage: result.actual_usage,
+            cost: result.cost,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn delete_recipe(state: State<'_, AppState>, recipe_id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        products_recipe::Entity::delete_by_id(recipe_id)
+            .exec(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub async fn update_recipe(state: State<'_, AppState>, data: UpdateRecipeRequest) -> Result<ProductsRecipeResponse, String> {
+        let db = &state.db;
+
+        let recipe = products_recipe::Entity::find()
+            .filter(products_recipe::Column::Id.eq(data.id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Recipe not found")?;
+
+        let mut recipe_active: products_recipe::ActiveModel = recipe.into();
+        recipe_active.product_id = Set(data.product_id);
+        recipe_active.ingredient_id = Set(data.ingredient_id);
+        recipe_active.usage_qty = Set(data.usage_qty);
+        recipe_active.usage_uom_code = Set(data.usage_uom_code);
+        recipe_active.actual_usage = Set(data.actual_usage);
+        recipe_active.cost = Set(data.cost);
+
+        let result = recipe_active
+            .update(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(ProductsRecipeResponse {
+            id: result.id,
+            product_id: result.product_id,
+            ingredient_id: result.ingredient_id,
+            usage_qty: result.usage_qty,
+            usage_uom_code: result.usage_uom_code,
+            actual_usage: result.actual_usage,
+            cost: result.cost,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn recalculate_product_cost(state: State<'_, AppState>, product_id: i32) -> Result<f64, String> {
+        let db = &state.db;
+
+        let recipes = products_recipe::Entity::find()
+            .filter(products_recipe::Column::ProductId.eq(product_id))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let total_cost: f64 = recipes.iter().map(|r| r.cost).sum();
+
+        // Update the product's recipe_cost
+        let product = product::Entity::find()
+            .filter(product::Column::Id.eq(product_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Product not found")?;
+
+        let mut product_active: product::ActiveModel = product.into();
+        product_active.recipe_cost = Set(total_cost);
+
+        product_active
+            .update(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(total_cost)
+    }
+
+    #[tauri::command]
+    pub async fn update_product_price_from_cost(state: State<'_, AppState>, product_id: i32) -> Result<f64, String> {
+        let db = &state.db;
+
+        let product = product::Entity::find()
+            .filter(product::Column::Id.eq(product_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Product not found")?;
+
+        // For now, just set price to recipe_cost (markup to be configured later)
+        let new_price = product.recipe_cost;
+
+        let mut product_active: product::ActiveModel = product.into();
+        product_active.price = Set(new_price);
+
+        product_active
+            .update(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(new_price)
+    }
+

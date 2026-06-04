@@ -16,6 +16,12 @@ pub mod m20250120_000020_create_temp_zx_reading_table;
 pub mod m20250120_000021_create_hst_txn_header_table;
 pub mod m20250120_000022_create_hst_txn_dtl_table;
 pub mod m20250120_000023_create_hst_zx_reading_table;
+pub mod m20250120_000024_create_unit_master_table;
+pub mod m20250120_000025_create_ingredient_master_file_table;
+pub mod m20250120_000026_create_conversion_file_table;
+pub mod m20250120_000027_create_products_recipe_table;
+pub mod m20250120_000028_add_recipe_cost_to_products;
+pub mod m20250120_000029_add_recipe_seed_data;
 
 pub use sea_orm_migration::prelude::*;
 
@@ -43,6 +49,12 @@ impl MigratorTrait for Migrator {
             Box::new(m20250120_000021_create_hst_txn_header_table::Migration),
             Box::new(m20250120_000022_create_hst_txn_dtl_table::Migration),
             Box::new(m20250120_000023_create_hst_zx_reading_table::Migration),
+            Box::new(m20250120_000024_create_unit_master_table::Migration),
+            Box::new(m20250120_000025_create_ingredient_master_file_table::Migration),
+            Box::new(m20250120_000026_create_conversion_file_table::Migration),
+            Box::new(m20250120_000027_create_products_recipe_table::Migration),
+            Box::new(m20250120_000028_add_recipe_cost_to_products::Migration),
+            Box::new(m20250120_000029_add_recipe_seed_data::Migration),
         ]
     }
 }

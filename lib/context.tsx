@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect  } from "react";
-import { User, Product, CartItem, Transaction, Category, TransactionItem, DiscountCodeResponse } from './types';
-import { getProducts, getCategories, getDiscountCodes, createTransaction as createTransactionData, createPosZxReading, loginUser as loginUserApi } from "./data";
+import { User, Product, CartItem, Transaction, Category, TransactionItem, DiscountCodeResponse, UnitMasterResponse, IngredientMasterFileResponse, ConversionFileResponse, ProductsRecipeResponse } from './types';
+import { getProducts, getCategories, getDiscountCodes, createTransaction as createTransactionData, createPosZxReading, loginUser as loginUserApi, getUnits, getIngredients, getConversions, getProductRecipe } from "./data";
 import { calculateItemVATBreakdown as calculateItemVAT, calculateSalesBreakdown } from './bir-computation';
 import { toast } from 'sonner';
 import { invoke } from '@tauri-apps/api/core';
@@ -42,6 +42,14 @@ interface POSContextType {
     // Business day status
     businessDayOpen: boolean;
     fetchBusinessDayStatus: () => Promise<void>;
+
+    // Inventory management
+    units: UnitMasterResponse[];
+    ingredients: IngredientMasterFileResponse[];
+    conversions: ConversionFileResponse[];
+    productRecipes: Map<string, ProductsRecipeResponse[]>;
+    loadInventoryData: () => Promise<void>;
+    loadProductRecipe: (productId: string) => Promise<void>;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -57,6 +65,10 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     const [managerAuthState, setManagerAuthState] = useState<User | null>(null);
     const [managerAuthSource, setManagerAuthSource] = useState<'main' | 'override' | null>(null);
     const [businessDayOpen, setBusinessDayOpen] = useState(false);
+    const [units, setUnits] = useState<UnitMasterResponse[]>([]);
+    const [ingredients, setIngredients] = useState<IngredientMasterFileResponse[]>([]);
+    const [conversions, setConversions] = useState<ConversionFileResponse[]>([]);
+    const [productRecipes, setProductRecipes] = useState<Map<string, ProductsRecipeResponse[]>>(new Map());
 
     const setManagerAuth = useCallback((manager: User | null, source?: 'main' | 'override') => {
         setManagerAuthState(manager);
@@ -74,6 +86,33 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
             setDiscountCodes(data);
         });
         fetchBusinessDayStatus();
+        loadInventoryData();
+    }, []);
+
+    const loadInventoryData = useCallback(async () => {
+        try {
+            const [unitsData, ingredientsData, conversionsData, categoriesData] = await Promise.all([
+                getUnits(),
+                getIngredients(),
+                getConversions(),
+                getCategories(),
+            ]);
+            setUnits(unitsData);
+            setIngredients(ingredientsData);
+            setConversions(conversionsData);
+            setCategories(categoriesData);
+        } catch (error) {
+            console.error('Failed to load inventory data:', error);
+        }
+    }, []);
+
+    const loadProductRecipe = useCallback(async (productId: string) => {
+        try {
+            const recipeData = await getProductRecipe(parseInt(productId));
+            setProductRecipes(prev => new Map(prev).set(productId, recipeData));
+        } catch (error) {
+            console.error('Failed to load product recipe:', error);
+        }
     }, []);
 
     const fetchBusinessDayStatus = useCallback(async () => {
@@ -482,7 +521,13 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         managerAuthSource,
         setManagerAuth,
         businessDayOpen,
-        fetchBusinessDayStatus
+        fetchBusinessDayStatus,
+        units,
+        ingredients,
+        conversions,
+        productRecipes,
+        loadInventoryData,
+        loadProductRecipe
     };
 
     

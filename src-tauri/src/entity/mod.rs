@@ -16,4 +16,8 @@ pub mod temp_zx_reading;
 pub mod hst_txn_head;
 pub mod hst_txn_dtl;
 pub mod hst_zx_reading;
+pub mod unit_master;
+pub mod ingredient_master_file;
+pub mod conversion_file;
+pub mod products_recipe;
 

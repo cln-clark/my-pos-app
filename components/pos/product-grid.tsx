@@ -60,8 +60,8 @@ export function ProductGrid({ disabled = false }: ProductGridProps) {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                     {   filteredProducts.map((product) => (
                         <Card   key={`${product.id}-${product.sku}`}
-                                onClick={(e) => { if (!disabled && product.stock > 0) addToCart(product, 1)}}
-                                className={`border border-slate-200 p-3 cursor-pointer transition-all active:scale-95 flex flex-col ${disabled || product.stock === 0 ? 'opacity-50 cursor-not-allowed' : 'active:border-blue-500'}`}
+                                onClick={(e) => { if (!disabled) addToCart(product, 1)}}
+                                className={`border border-slate-200 p-3 cursor-pointer transition-all active:scale-95 flex flex-col ${disabled ? 'opacity-50 cursor-not-allowed' : 'active:border-blue-500'}`}
                                 >
                                 {/* Product Info */}
                                 <div className="text-center flex flex-col flex-1">
@@ -69,15 +69,6 @@ export function ProductGrid({ disabled = false }: ProductGridProps) {
                                     <p className="text-xs text-gray-500 mb-2">{product.sku}</p>
                                     <p className="text-lg font-bold text-green-600 mt-auto">₱{product.price.toFixed(2)}</p>
                                 </div>
-
-                                {/* Stock Status */}
-                                <p className={`text-xs font-medium mt-2 ${
-                                    product.stock < 10
-                                    ? 'text-red-600'
-                                    : 'text-muted-foreground'
-                                }`}>
-                                    {product.stock > 0 ? `Stock: ${product.stock}` : 'Out of stock'}
-                                </p>
                         </Card>
                         ))}
                 </div>
