@@ -11,7 +11,6 @@ pub struct Model {
     pub usage_qty: f64,
     #[sea_orm(column_type = "Text")]
     pub usage_uom_code: String,
-    pub actual_usage: f64,
     pub cost: f64,
 }
 

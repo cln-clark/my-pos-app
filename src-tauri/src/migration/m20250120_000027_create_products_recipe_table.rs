@@ -16,7 +16,6 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(ProductsRecipe::IngredientId).integer().not_null())
                     .col(ColumnDef::new(ProductsRecipe::UsageQty).double().not_null())
                     .col(ColumnDef::new(ProductsRecipe::UsageUomCode).string().not_null())
-                    .col(ColumnDef::new(ProductsRecipe::ActualUsage).double().not_null())
                     .col(ColumnDef::new(ProductsRecipe::Cost).double().not_null())
                     .foreign_key(
                         ForeignKey::create()
@@ -54,7 +53,6 @@ enum ProductsRecipe {
     IngredientId,
     UsageQty,
     UsageUomCode,
-    ActualUsage,
     Cost,
 }
 

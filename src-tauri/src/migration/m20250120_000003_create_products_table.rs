@@ -16,6 +16,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Products::Name).string().not_null())
                     .col(ColumnDef::new(Products::Price).double().not_null())
                     .col(ColumnDef::new(Products::CategoryId).integer())
+                    .col(ColumnDef::new(Products::RecipeCost).double().not_null().default(0))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-products-category_id")
@@ -45,6 +46,7 @@ enum Products {
     Name,
     Price,
     CategoryId,
+    RecipeCost,
 }
             
 #[derive(DeriveIden)]

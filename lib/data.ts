@@ -8,7 +8,9 @@
     ProductsRecipeResponse, CreateRecipeRequest, UpdateRecipeRequest,
     CreateProductRequest, UpdateProductRequest,
     CreateCategoryRequest, UpdateCategoryRequest,
-    CsvProductRow, BatchImportRequest, BatchImportResponse } from './types';
+    CsvProductRow, BatchImportRequest, BatchImportResponse,
+    CsvIngredientRow, BatchImportIngredientsRequest,
+    BulkRecipeLine } from './types';
   import { invoke } from '@tauri-apps/api/core';
 
   export async function getProducts() {
@@ -369,6 +371,26 @@
       return result as BatchImportResponse;
     } catch (error) {
       console.error('Error batch importing products:', error);
+      throw error;
+    }
+  }
+
+  export async function batchImportIngredients(data: BatchImportIngredientsRequest): Promise<BatchImportResponse> {
+    try {
+      const result = await invoke('batch_import_ingredients', { data });
+      return result as BatchImportResponse;
+    } catch (error) {
+      console.error('Error batch importing ingredients:', error);
+      throw error;
+    }
+  }
+
+  export async function saveRecipeBulk(productId: number, lines: BulkRecipeLine[]): Promise<ProductsRecipeResponse[]> {
+    try {
+      const result = await invoke('save_recipe_bulk', { data: { product_id: productId, lines } });
+      return result as ProductsRecipeResponse[];
+    } catch (error) {
+      console.error('Error saving recipe bulk:', error);
       throw error;
     }
   }

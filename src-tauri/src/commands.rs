@@ -383,8 +383,8 @@
 
         // Now process products
         for (index, row) in data.products.iter().enumerate() {
-            // Validate required fields
-            if row.sku.is_empty() || row.name.is_empty() || row.price <= 0.0 {
+            // Validate required fields (price can be 0, will be auto-computed from recipe)
+            if row.sku.is_empty() || row.name.is_empty() || row.price < 0.0 {
                 error_count += 1;
                 errors.push(format!("Row {}: Missing or invalid required fields", index + 1));
                 continue;
@@ -626,7 +626,7 @@
                         .map_err(|e| e.to_string())?
                         .ok_or("Ingredient not found")?;
 
-                    let required_qty = (recipe.actual_usage * item.qty as f64) as i32;
+                    let required_qty = (recipe.usage_qty * item.qty as f64) as i32;
 
                     if ingredient.base_stock_qty < required_qty {
                         return Err(format!(
@@ -638,7 +638,7 @@
 
                 // Deduct stock for each ingredient
                 for recipe in &recipes {
-                    let required_qty = (recipe.actual_usage * item.qty as f64) as i32;
+                    let required_qty = (recipe.usage_qty * item.qty as f64) as i32;
 
                     let ingredient = ingredient_master_file::Entity::find()
                         .filter(ingredient_master_file::Column::Id.eq(recipe.ingredient_id))
@@ -1828,7 +1828,7 @@
                 if !recipes.is_empty() {
                     // Restore stock for each ingredient in the recipe
                     for recipe in &recipes {
-                        let restore_qty = (recipe.actual_usage * item.qty as f64) as i32;
+                        let restore_qty = (recipe.usage_qty * item.qty as f64) as i32;
 
                         let ingredient = ingredient_master_file::Entity::find()
                             .filter(ingredient_master_file::Column::Id.eq(recipe.ingredient_id))
@@ -1983,8 +1983,7 @@
         pub max_stock_lvl: i32,
         pub usage_unit_id: Option<i32>,
         pub base_stock_qty: i32,
-        pub local_cost: f64,
-        pub conversion_rate: f64,
+        pub last_cost: f64,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1995,8 +1994,6 @@
         pub max_stock_lvl: i32,
         pub usage_unit_id: Option<i32>,
         pub base_stock_qty: i32,
-        pub local_cost: f64,
-        pub conversion_rate: f64,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -2014,8 +2011,23 @@
         pub max_stock_lvl: i32,
         pub usage_unit_id: Option<i32>,
         pub base_stock_qty: i32,
-        pub local_cost: f64,
-        pub conversion_rate: f64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CsvIngredientRow {
+        pub description: String,
+        pub cost_price: f64,
+        pub base_stock_qty: i32,
+        pub unit_code: String,
+        pub min_stock_lvl: i32,
+        pub max_stock_lvl: i32,
+        pub last_cost: f64,
+        pub ingr_code: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct BatchImportIngredientsRequest {
+        pub ingredients: Vec<CsvIngredientRow>,
     }
 
     #[tauri::command]
@@ -2039,8 +2051,7 @@
                 max_stock_lvl: i.max_stock_lvl,
                 usage_unit_id: i.usage_unit_id,
                 base_stock_qty: i.base_stock_qty,
-                local_cost: i.local_cost,
-                conversion_rate: i.conversion_rate,
+                last_cost: i.last_cost,
             })
             .collect();
 
@@ -2072,8 +2083,7 @@
             max_stock_lvl: Set(data.max_stock_lvl),
             usage_unit_id: Set(data.usage_unit_id),
             base_stock_qty: Set(data.base_stock_qty),
-            local_cost: Set(data.local_cost),
-            conversion_rate: Set(data.conversion_rate),
+            last_cost: Set(data.cost_price),
             ..Default::default()
         };
 
@@ -2092,8 +2102,7 @@
             max_stock_lvl: result.max_stock_lvl,
             usage_unit_id: result.usage_unit_id,
             base_stock_qty: result.base_stock_qty,
-            local_cost: result.local_cost,
-            conversion_rate: result.conversion_rate,
+            last_cost: result.last_cost,
         })
     }
 
@@ -2132,15 +2141,17 @@
             .map_err(|e| e.to_string())?
             .ok_or("Ingredient not found")?;
 
+        let old_cost_price = ingredient.cost_price;
         let mut ingredient_active: ingredient_master_file::ActiveModel = ingredient.into();
+        if data.cost_price != old_cost_price {
+            ingredient_active.last_cost = Set(old_cost_price);
+        }
         ingredient_active.description = Set(data.description);
         ingredient_active.cost_price = Set(data.cost_price);
         ingredient_active.min_stock_lvl = Set(data.min_stock_lvl);
         ingredient_active.max_stock_lvl = Set(data.max_stock_lvl);
         ingredient_active.usage_unit_id = Set(data.usage_unit_id);
         ingredient_active.base_stock_qty = Set(data.base_stock_qty);
-        ingredient_active.local_cost = Set(data.local_cost);
-        ingredient_active.conversion_rate = Set(data.conversion_rate);
 
         let result = ingredient_active
             .update(&**db)
@@ -2157,8 +2168,7 @@
             max_stock_lvl: result.max_stock_lvl,
             usage_unit_id: result.usage_unit_id,
             base_stock_qty: result.base_stock_qty,
-            local_cost: result.local_cost,
-            conversion_rate: result.conversion_rate,
+            last_cost: result.last_cost,
         })
     }
 
@@ -2172,6 +2182,121 @@
             .map_err(|e| e.to_string())?;
 
         Ok(())
+    }
+
+    #[tauri::command]
+    pub async fn batch_import_ingredients(state: State<'_, AppState>, data: BatchImportIngredientsRequest) -> Result<BatchImportResponse, String> {
+        let db = &state.db;
+        let mut success_count = 0;
+        let mut error_count = 0;
+        let mut errors = Vec::new();
+
+        let txn = db.begin().await.map_err(|e| e.to_string())?;
+
+        // Build unit lookup map by unit_code
+        let existing_units = unit_master::Entity::find()
+            .all(&txn)
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut unit_map: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
+        for u in existing_units {
+            unit_map.insert(u.unit_code.to_lowercase(), u.id);
+        }
+
+        // Get current max id for auto-generating codes
+        let max_id = ingredient_master_file::Entity::find()
+            .all(&txn)
+            .await
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|i| i.id)
+            .max()
+            .unwrap_or(0);
+        let mut next_id = max_id + 1;
+
+        for (index, row) in data.ingredients.iter().enumerate() {
+            if row.description.is_empty() || row.cost_price <= 0.0 {
+                error_count += 1;
+                errors.push(format!("Row {}: Missing or invalid required fields", index + 1));
+                continue;
+            }
+
+            // Check for duplicate description
+            let existing = ingredient_master_file::Entity::find()
+                .filter(ingredient_master_file::Column::Description.eq(&row.description))
+                .one(&txn)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            if existing.is_some() {
+                error_count += 1;
+                errors.push(format!("Row {}: Ingredient '{}' already exists", index + 1, row.description));
+                continue;
+            }
+
+            let usage_unit_id = if row.unit_code.is_empty() {
+                None
+            } else {
+                unit_map.get(&row.unit_code.to_lowercase()).copied()
+            };
+
+            let ingr_code = if row.ingr_code.is_empty() {
+                let code = format!("ING-{:03}", next_id);
+                next_id += 1;
+                code
+            } else {
+                // Check for duplicate ingr_code
+                let existing_code = ingredient_master_file::Entity::find()
+                    .filter(ingredient_master_file::Column::IngrCode.eq(&row.ingr_code))
+                    .one(&txn)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                if existing_code.is_some() {
+                    error_count += 1;
+                    errors.push(format!("Row {}: Ingredient code '{}' already exists", index + 1, row.ingr_code));
+                    continue;
+                }
+                row.ingr_code.clone()
+            };
+
+            let base_stock_qty = if row.base_stock_qty > 0 { row.base_stock_qty } else { 0 };
+            let min_stock_lvl = if row.min_stock_lvl > 0 { row.min_stock_lvl } else { 10 };
+            let max_stock_lvl = if row.max_stock_lvl > 0 { row.max_stock_lvl } else { 100 };
+            let last_cost = if row.last_cost > 0.0 { row.last_cost } else { row.cost_price };
+
+            let new_ingredient = ingredient_master_file::ActiveModel {
+                company_id: Set(1),
+                ingr_code: Set(ingr_code),
+                description: Set(row.description.clone()),
+                cost_price: Set(row.cost_price),
+                min_stock_lvl: Set(min_stock_lvl),
+                max_stock_lvl: Set(max_stock_lvl),
+                usage_unit_id: Set(usage_unit_id),
+                base_stock_qty: Set(base_stock_qty),
+                last_cost: Set(last_cost),
+                ..Default::default()
+            };
+
+            match new_ingredient.insert(&txn).await {
+                Ok(_) => success_count += 1,
+                Err(e) => {
+                    error_count += 1;
+                    errors.push(format!("Row {}: Failed to create ingredient - {}", index + 1, e));
+                }
+            }
+        }
+
+        if error_count > 0 && success_count == 0 {
+            txn.rollback().await.map_err(|e| e.to_string())?;
+        } else {
+            txn.commit().await.map_err(|e| e.to_string())?;
+        }
+
+        Ok(BatchImportResponse {
+            success_count,
+            error_count,
+            errors,
+        })
     }
 
     // Conversion Management Commands
@@ -2252,7 +2377,6 @@
         pub ingredient_id: i32,
         pub usage_qty: f64,
         pub usage_uom_code: String,
-        pub actual_usage: f64,
         pub cost: f64,
     }
 
@@ -2262,8 +2386,6 @@
         pub ingredient_id: i32,
         pub usage_qty: f64,
         pub usage_uom_code: String,
-        pub actual_usage: f64,
-        pub cost: f64,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -2273,8 +2395,25 @@
         pub ingredient_id: i32,
         pub usage_qty: f64,
         pub usage_uom_code: String,
-        pub actual_usage: f64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct BulkRecipeLine {
+        pub id: Option<i32>,
+        pub ingredient_id: i32,
+        pub usage_qty: f64,
+        pub usage_uom_code: String,
         pub cost: f64,
+        #[serde(rename = "isNew")]
+        pub is_new: bool,
+        #[serde(rename = "isDeleted")]
+        pub is_deleted: bool,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct SaveRecipeBulkRequest {
+        pub product_id: i32,
+        pub lines: Vec<BulkRecipeLine>,
     }
 
     #[tauri::command]
@@ -2295,7 +2434,6 @@
                 ingredient_id: r.ingredient_id,
                 usage_qty: r.usage_qty,
                 usage_uom_code: r.usage_uom_code,
-                actual_usage: r.actual_usage,
                 cost: r.cost,
             })
             .collect();
@@ -2307,13 +2445,25 @@
     pub async fn create_recipe(state: State<'_, AppState>, data: CreateRecipeRequest) -> Result<ProductsRecipeResponse, String> {
         let db = &state.db;
 
+        let ingredient = ingredient_master_file::Entity::find()
+            .filter(ingredient_master_file::Column::Id.eq(data.ingredient_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Ingredient not found")?;
+
+        let cost = if ingredient.base_stock_qty > 0 {
+            data.usage_qty * (ingredient.cost_price / ingredient.base_stock_qty as f64)
+        } else {
+            data.usage_qty * ingredient.cost_price
+        };
+
         let new_recipe = products_recipe::ActiveModel {
             product_id: Set(data.product_id),
             ingredient_id: Set(data.ingredient_id),
             usage_qty: Set(data.usage_qty),
             usage_uom_code: Set(data.usage_uom_code),
-            actual_usage: Set(data.actual_usage),
-            cost: Set(data.cost),
+            cost: Set(cost),
             ..Default::default()
         };
 
@@ -2322,13 +2472,30 @@
             .await
             .map_err(|e| e.to_string())?;
 
+        // Update product price to match recipe cost
+        let product = product::Entity::find()
+            .filter(product::Column::Id.eq(data.product_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Product not found")?;
+        let recipes = products_recipe::Entity::find()
+            .filter(products_recipe::Column::ProductId.eq(data.product_id))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+        let total_cost: f64 = recipes.iter().map(|r| r.cost).sum();
+        let mut product_active: product::ActiveModel = product.into();
+        product_active.recipe_cost = Set(total_cost);
+        product_active.price = Set(total_cost);
+        product_active.update(&**db).await.map_err(|e| e.to_string())?;
+
         Ok(ProductsRecipeResponse {
             id: result.id,
             product_id: result.product_id,
             ingredient_id: result.ingredient_id,
             usage_qty: result.usage_qty,
             usage_uom_code: result.usage_uom_code,
-            actual_usage: result.actual_usage,
             cost: result.cost,
         })
     }
@@ -2356,18 +2523,48 @@
             .map_err(|e| e.to_string())?
             .ok_or("Recipe not found")?;
 
+        let ingredient = ingredient_master_file::Entity::find()
+            .filter(ingredient_master_file::Column::Id.eq(data.ingredient_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Ingredient not found")?;
+
+        let cost = if ingredient.base_stock_qty > 0 {
+            data.usage_qty * (ingredient.cost_price / ingredient.base_stock_qty as f64)
+        } else {
+            data.usage_qty * ingredient.cost_price
+        };
+
         let mut recipe_active: products_recipe::ActiveModel = recipe.into();
         recipe_active.product_id = Set(data.product_id);
         recipe_active.ingredient_id = Set(data.ingredient_id);
         recipe_active.usage_qty = Set(data.usage_qty);
         recipe_active.usage_uom_code = Set(data.usage_uom_code);
-        recipe_active.actual_usage = Set(data.actual_usage);
-        recipe_active.cost = Set(data.cost);
+        recipe_active.cost = Set(cost);
 
         let result = recipe_active
             .update(&**db)
             .await
             .map_err(|e| e.to_string())?;
+
+        // Update product price to match recipe cost
+        let product = product::Entity::find()
+            .filter(product::Column::Id.eq(data.product_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Product not found")?;
+        let recipes = products_recipe::Entity::find()
+            .filter(products_recipe::Column::ProductId.eq(data.product_id))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+        let total_cost: f64 = recipes.iter().map(|r| r.cost).sum();
+        let mut product_active: product::ActiveModel = product.into();
+        product_active.recipe_cost = Set(total_cost);
+        product_active.price = Set(total_cost);
+        product_active.update(&**db).await.map_err(|e| e.to_string())?;
 
         Ok(ProductsRecipeResponse {
             id: result.id,
@@ -2375,9 +2572,103 @@
             ingredient_id: result.ingredient_id,
             usage_qty: result.usage_qty,
             usage_uom_code: result.usage_uom_code,
-            actual_usage: result.actual_usage,
             cost: result.cost,
         })
+    }
+
+    #[tauri::command]
+    pub async fn save_recipe_bulk(state: State<'_, AppState>, data: SaveRecipeBulkRequest) -> Result<Vec<ProductsRecipeResponse>, String> {
+        let db = &state.db;
+
+        // Build ingredient cost lookup map
+        let ingredients = ingredient_master_file::Entity::find()
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut cost_map: std::collections::HashMap<i32, f64> = std::collections::HashMap::new();
+        for ing in ingredients {
+            let unit_cost = if ing.base_stock_qty > 0 {
+                ing.cost_price / ing.base_stock_qty as f64
+            } else {
+                ing.cost_price
+            };
+            cost_map.insert(ing.id, unit_cost);
+        }
+
+        for line in &data.lines {
+            if line.is_deleted {
+                if let Some(id) = line.id {
+                    products_recipe::Entity::delete_by_id(id)
+                        .exec(&**db)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                }
+            } else {
+                let ingredient_cost = cost_map.get(&line.ingredient_id).copied().unwrap_or(0.0);
+                let cost = line.usage_qty * ingredient_cost;
+
+                if line.is_new {
+                    let new_recipe = products_recipe::ActiveModel {
+                        product_id: Set(data.product_id),
+                        ingredient_id: Set(line.ingredient_id),
+                        usage_qty: Set(line.usage_qty),
+                        usage_uom_code: Set(line.usage_uom_code.clone()),
+                        cost: Set(cost),
+                        ..Default::default()
+                    };
+                    new_recipe.insert(&**db).await.map_err(|e| e.to_string())?;
+                } else if let Some(id) = line.id {
+                    let recipe = products_recipe::Entity::find()
+                        .filter(products_recipe::Column::Id.eq(id))
+                        .one(&**db)
+                        .await
+                        .map_err(|e| e.to_string())?
+                        .ok_or("Recipe not found")?;
+
+                    let mut recipe_active: products_recipe::ActiveModel = recipe.into();
+                    recipe_active.ingredient_id = Set(line.ingredient_id);
+                    recipe_active.usage_qty = Set(line.usage_qty);
+                    recipe_active.usage_uom_code = Set(line.usage_uom_code.clone());
+                    recipe_active.cost = Set(cost);
+                    recipe_active.update(&**db).await.map_err(|e| e.to_string())?;
+                }
+            }
+        }
+
+        // Recalculate product cost automatically
+        let recipes = products_recipe::Entity::find()
+            .filter(products_recipe::Column::ProductId.eq(data.product_id))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let total_cost: f64 = recipes.iter().map(|r| r.cost).sum();
+
+        let product = product::Entity::find()
+            .filter(product::Column::Id.eq(data.product_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Product not found")?;
+
+        let mut product_active: product::ActiveModel = product.into();
+        product_active.recipe_cost = Set(total_cost);
+        product_active.price = Set(total_cost);
+        product_active.update(&**db).await.map_err(|e| e.to_string())?;
+
+        let recipe_responses: Vec<ProductsRecipeResponse> = recipes
+            .into_iter()
+            .map(|r| ProductsRecipeResponse {
+                id: r.id,
+                product_id: r.product_id,
+                ingredient_id: r.ingredient_id,
+                usage_qty: r.usage_qty,
+                usage_uom_code: r.usage_uom_code,
+                cost: r.cost,
+            })
+            .collect();
+
+        Ok(recipe_responses)
     }
 
     #[tauri::command]

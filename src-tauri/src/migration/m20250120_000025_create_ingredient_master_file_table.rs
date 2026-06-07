@@ -20,8 +20,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(IngredientMasterFile::MaxStockLvl).integer().not_null().default(0))
                     .col(ColumnDef::new(IngredientMasterFile::UsageUnitId).integer())
                     .col(ColumnDef::new(IngredientMasterFile::BaseStockQty).integer().not_null().default(0))
-                    .col(ColumnDef::new(IngredientMasterFile::LocalCost).double().not_null().default(0))
-                    .col(ColumnDef::new(IngredientMasterFile::ConversionRate).double().not_null().default(1))
+                    .col(ColumnDef::new(IngredientMasterFile::LastCost).double().not_null().default(0))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-ingredient_master_file-usage_unit_id")
@@ -32,16 +31,6 @@ impl MigrationTrait for Migration {
                     .to_owned(),
             )
             .await?;
-
-        let db = manager.get_connection();
-        db.execute_unprepared("
-            INSERT OR IGNORE INTO ingredient_master_file (ingr_code, description, cost_price, min_stock_lvl, max_stock_lvl, base_stock_qty, local_cost, conversion_rate) VALUES
-            ('ING-001', 'Sugar', 45.00, 10, 100, 50, 45.00, 1),
-            ('ING-002', 'Flour', 38.00, 10, 100, 50, 38.00, 1),
-            ('ING-003', 'Milk', 65.00, 5, 50, 25, 65.00, 1),
-            ('ING-004', 'Coffee Powder', 120.00, 5, 50, 25, 120.00, 1),
-            ('ING-005', 'Ice', 5.00, 20, 200, 100, 5.00, 1);
-        ").await?;
 
         Ok(())
     }
@@ -65,8 +54,7 @@ enum IngredientMasterFile {
     MaxStockLvl,
     UsageUnitId,
     BaseStockQty,
-    LocalCost,
-    ConversionRate,
+    LastCost,
 }
 
 #[derive(DeriveIden)]

@@ -379,8 +379,7 @@ export interface IngredientMasterFile {
   max_stock_lvl: number;
   usage_unit_id: number | null;
   base_stock_qty: number;
-  local_cost: number;
-  conversion_rate: number;
+  last_cost: number;
 }
 
 export interface IngredientMasterFileResponse {
@@ -393,8 +392,7 @@ export interface IngredientMasterFileResponse {
   max_stock_lvl: number;
   usage_unit_id: number | null;
   base_stock_qty: number;
-  local_cost: number;
-  conversion_rate: number;
+  last_cost: number;
 }
 
 export interface CreateIngredientRequest {
@@ -404,8 +402,6 @@ export interface CreateIngredientRequest {
   max_stock_lvl: number;
   usage_unit_id: number | null;
   base_stock_qty: number;
-  local_cost: number;
-  conversion_rate: number;
 }
 
 export interface UpdateIngredientStockRequest {
@@ -421,8 +417,6 @@ export interface UpdateIngredientRequest {
   max_stock_lvl: number;
   usage_unit_id: number | null;
   base_stock_qty: number;
-  local_cost: number;
-  conversion_rate: number;
 }
 
 export interface ConversionFile {
@@ -455,7 +449,6 @@ export interface ProductsRecipe {
   ingredient_id: number;
   usage_qty: number;
   usage_uom_code: string;
-  actual_usage: number;
   cost: number;
 }
 
@@ -465,7 +458,6 @@ export interface ProductsRecipeResponse {
   ingredient_id: number;
   usage_qty: number;
   usage_uom_code: string;
-  actual_usage: number;
   cost: number;
 }
 
@@ -474,8 +466,6 @@ export interface CreateRecipeRequest {
   ingredient_id: number;
   usage_qty: number;
   usage_uom_code: string;
-  actual_usage: number;
-  cost: number;
 }
 
 export interface UpdateRecipeRequest {
@@ -484,6 +474,29 @@ export interface UpdateRecipeRequest {
   ingredient_id: number;
   usage_qty: number;
   usage_uom_code: string;
-  actual_usage: number;
+}
+
+export interface CsvIngredientRow {
+  description: string;
+  cost_price: number;
+  base_stock_qty: number;
+  unit_code: string;
+  min_stock_lvl: number;
+  max_stock_lvl: number;
+  last_cost: number;
+  ingr_code: string;
+}
+
+export interface BatchImportIngredientsRequest {
+  ingredients: CsvIngredientRow[];
+}
+
+export interface BulkRecipeLine {
+  id?: number;
+  ingredient_id: number;
+  usage_qty: number;
+  usage_uom_code: string;
   cost: number;
+  isNew: boolean;
+  isDeleted: boolean;
 }

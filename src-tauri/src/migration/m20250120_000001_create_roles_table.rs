@@ -19,7 +19,7 @@
                 )
                 .await?;
                 
-        //Temporary seed roles
+        //Global Seed roles
         let db = manager.get_connection();
         db.execute_unprepared(
             "INSERT OR IGNORE INTO roles (role_name) VALUES ('Cashier'), ('Manager')"

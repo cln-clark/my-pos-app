@@ -16,8 +16,7 @@ pub struct Model {
     pub max_stock_lvl: i32,
     pub usage_unit_id: Option<i32>,
     pub base_stock_qty: i32,
-    pub local_cost: f64,
-    pub conversion_rate: f64,
+    pub last_cost: f64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

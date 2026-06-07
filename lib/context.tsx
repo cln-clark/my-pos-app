@@ -91,16 +91,18 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
 
     const loadInventoryData = useCallback(async () => {
         try {
-            const [unitsData, ingredientsData, conversionsData, categoriesData] = await Promise.all([
+            const [unitsData, ingredientsData, conversionsData, categoriesData, productsData] = await Promise.all([
                 getUnits(),
                 getIngredients(),
                 getConversions(),
                 getCategories(),
+                getProducts(),
             ]);
             setUnits(unitsData);
             setIngredients(ingredientsData);
             setConversions(conversionsData);
             setCategories(categoriesData);
+            setProducts(productsData);
         } catch (error) {
             console.error('Failed to load inventory data:', error);
         }

@@ -11,8 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePOS } from '@/lib/context';
-import { UnitMasterResponse, CreateUnitMasterRequest, ProductsRecipeResponse, CreateRecipeRequest, UpdateRecipeRequest, CreateIngredientRequest, UpdateIngredientRequest, UpdateIngredientStockRequest, CreateProductRequest, UpdateProductRequest, CreateCategoryRequest, UpdateCategoryRequest, CsvProductRow, BatchImportRequest } from '@/lib/types';
-import { createUnitMaster, getProductRecipe, createRecipe, deleteRecipe, updateRecipe, recalculateProductCost, updateProductPriceFromCost, createIngredient, updateIngredient, deleteIngredient, updateIngredientStock, createProduct, updateProduct, deleteProduct, createCategory, updateCategory, deleteCategory, batchImportProducts } from '@/lib/data';
+import { UnitMasterResponse, CreateUnitMasterRequest, ProductsRecipeResponse, CreateIngredientRequest, UpdateIngredientRequest, UpdateIngredientStockRequest, CreateProductRequest, UpdateProductRequest, CreateCategoryRequest, UpdateCategoryRequest, CsvProductRow, BatchImportRequest, CsvIngredientRow, BatchImportIngredientsRequest, BulkRecipeLine } from '@/lib/types';
+import { createUnitMaster, getProductRecipe, recalculateProductCost, updateProductPriceFromCost, createIngredient, updateIngredient, deleteIngredient, updateIngredientStock, createProduct, updateProduct, deleteProduct, createCategory, updateCategory, deleteCategory, batchImportProducts, batchImportIngredients, saveRecipeBulk } from '@/lib/data';
 import { toast } from 'sonner';
 
 export default function InventoryPage() {
@@ -179,10 +179,10 @@ function ProductsTab({ products, categories, loadInventoryData }: { products: an
 
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split(',').map(v => v.trim());
-                if (values.length !== 5) continue;
+                if (values.length < 4) continue;
 
-                const price = parseFloat(values[2]);
-                if (isNaN(price) || price <= 0) {
+                const price = values[2] ? parseFloat(values[2]) : 0;
+                if (values[2] && isNaN(price)) {
                     toast.error(`Row ${i + 1}: Invalid price value`);
                     continue;
                 }
@@ -192,7 +192,7 @@ function ProductsTab({ products, categories, loadInventoryData }: { products: an
                     name: values[1],
                     price: price,
                     category_code: values[3],
-                    category_name: values[4],
+                    category_name: values[4] || '',
                 });
             }
 
@@ -613,6 +613,7 @@ function IngredientsTab({ ingredients, units, loadInventoryData }: { ingredients
     const [restockAmount, setRestockAmount] = useState(0);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isRestockDialogOpen, setIsRestockDialogOpen] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     const [formData, setFormData] = useState({
         description: '',
         cost_price: 0,
@@ -620,14 +621,12 @@ function IngredientsTab({ ingredients, units, loadInventoryData }: { ingredients
         max_stock_lvl: 0,
         usage_unit_id: null as number | null,
         base_stock_qty: 0,
-        local_cost: 0,
-        conversion_rate: 1,
     });
 
     const handleAddIngredient = async () => {
         setIsAdding(true);
         setEditingIngredient(null);
-        setFormData({ description: '', cost_price: 0, min_stock_lvl: 0, max_stock_lvl: 0, usage_unit_id: null, base_stock_qty: 0, local_cost: 0, conversion_rate: 1 });
+        setFormData({ description: '', cost_price: 0, min_stock_lvl: 0, max_stock_lvl: 0, usage_unit_id: null, base_stock_qty: 0 });
         setIsDialogOpen(true);
     };
 
@@ -647,8 +646,6 @@ function IngredientsTab({ ingredients, units, loadInventoryData }: { ingredients
                     max_stock_lvl: formData.max_stock_lvl,
                     usage_unit_id: formData.usage_unit_id,
                     base_stock_qty: formData.base_stock_qty,
-                    local_cost: formData.local_cost,
-                    conversion_rate: formData.conversion_rate,
                 };
                 await updateIngredient(data);
                 toast.success('Ingredient updated successfully');
@@ -660,13 +657,11 @@ function IngredientsTab({ ingredients, units, loadInventoryData }: { ingredients
                     max_stock_lvl: formData.max_stock_lvl,
                     usage_unit_id: formData.usage_unit_id,
                     base_stock_qty: formData.base_stock_qty,
-                    local_cost: formData.local_cost,
-                    conversion_rate: formData.conversion_rate,
                 };
                 await createIngredient(data);
                 toast.success('Ingredient added successfully');
             }
-            setFormData({ description: '', cost_price: 0, min_stock_lvl: 0, max_stock_lvl: 0, usage_unit_id: null, base_stock_qty: 0, local_cost: 0, conversion_rate: 1 });
+            setFormData({ description: '', cost_price: 0, min_stock_lvl: 0, max_stock_lvl: 0, usage_unit_id: null, base_stock_qty: 0 });
             setIsAdding(false);
             setEditingIngredient(null);
             setIsDialogOpen(false);
@@ -686,8 +681,6 @@ function IngredientsTab({ ingredients, units, loadInventoryData }: { ingredients
             max_stock_lvl: ingredient.max_stock_lvl,
             usage_unit_id: ingredient.usage_unit_id,
             base_stock_qty: ingredient.base_stock_qty,
-            local_cost: ingredient.local_cost,
-            conversion_rate: ingredient.conversion_rate,
         });
         setIsDialogOpen(true);
     };
@@ -700,6 +693,80 @@ function IngredientsTab({ ingredients, units, loadInventoryData }: { ingredients
         } catch (error) {
             toast.error('Failed to delete ingredient');
             console.error(error);
+        }
+    };
+
+    const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+
+        try {
+            const text = await file.text();
+            const lines = text.split('\n').filter(line => line.trim());
+
+            if (lines.length < 2) {
+                toast.error('CSV file is empty or has no data rows');
+                setIsUploading(false);
+                return;
+            }
+
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            const requiredHeaders = ['description', 'cost_price'];
+
+            if (!requiredHeaders.every(h => headers.includes(h))) {
+                toast.error('CSV must have at minimum: description, cost_price');
+                setIsUploading(false);
+                return;
+            }
+
+            const csvIngredients: CsvIngredientRow[] = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+                if (values.length < 3) continue;
+
+                const costPrice = parseFloat(values[2]);
+                if (isNaN(costPrice) || costPrice <= 0) {
+                    toast.error(`Row ${i + 1}: Invalid cost_price value`);
+                    continue;
+                }
+
+                csvIngredients.push({
+                    ingr_code: values[0] || '',
+                    description: values[1],
+                    cost_price: costPrice,
+                    base_stock_qty: values[3] ? parseInt(values[3]) || 0 : 0,
+                    unit_code: values[4] || '',
+                    min_stock_lvl: values[5] ? parseInt(values[5]) || 0 : 0,
+                    max_stock_lvl: values[6] ? parseInt(values[6]) || 0 : 0,
+                    last_cost: values[7] ? parseFloat(values[7]) || 0 : 0,
+                });
+            }
+
+            if (csvIngredients.length === 0) {
+                toast.error('No valid ingredients found in CSV');
+                setIsUploading(false);
+                return;
+            }
+
+            const result = await batchImportIngredients({ ingredients: csvIngredients });
+
+            if (result.error_count > 0) {
+                toast.error(`Import completed with ${result.success_count} successes and ${result.error_count} errors`);
+                result.errors.forEach(err => console.error(err));
+            } else {
+                toast.success(`Successfully imported ${result.success_count} ingredients`);
+            }
+
+            loadInventoryData();
+        } catch (error) {
+            toast.error('Failed to process CSV file');
+            console.error(error);
+        } finally {
+            setIsUploading(false);
+            event.target.value = '';
         }
     };
 
@@ -748,7 +815,21 @@ function IngredientsTab({ ingredients, units, loadInventoryData }: { ingredients
                         <CardTitle>Ingredients</CardTitle>
                         <CardDescription>Manage ingredient inventory and stock levels</CardDescription>
                     </div>
-                    <Button onClick={handleAddIngredient}>Add Ingredient</Button>
+                    <div className="flex gap-2">
+                        <input
+                            type="file"
+                            accept=".csv"
+                            onChange={handleCsvUpload}
+                            className="hidden"
+                            id="ingredientCsvUpload"
+                        />
+                        <label htmlFor="ingredientCsvUpload">
+                            <Button variant="outline" disabled={isUploading} asChild>
+                                <span>{isUploading ? 'Uploading...' : 'Upload CSV'}</span>
+                            </Button>
+                        </label>
+                        <Button onClick={handleAddIngredient}>Add Ingredient</Button>
+                    </div>
                 </div>
             </CardHeader>
             <CardContent>
@@ -778,6 +859,11 @@ function IngredientsTab({ ingredients, units, loadInventoryData }: { ingredients
                                     value={formData.cost_price}
                                     onChange={(e) => setFormData({ ...formData, cost_price: parseFloat(e.target.value) || 0 })}
                                 />
+                                {editingIngredient && (
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                        Last Cost: ₱{editingIngredient.last_cost?.toFixed(2) || '0.00'}
+                                    </p>
+                                )}
                             </div>
                             <div>
                                 <Label htmlFor="minStock">Min Stock</Label>
@@ -822,31 +908,11 @@ function IngredientsTab({ ingredients, units, loadInventoryData }: { ingredients
                                     ))}
                                 </select>
                             </div>
-                            <div>
-                                <Label htmlFor="localCost">Local Cost</Label>
-                                <Input
-                                    id="localCost"
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.local_cost}
-                                    onChange={(e) => setFormData({ ...formData, local_cost: parseFloat(e.target.value) || 0 })}
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="conversionRate">Conversion Rate</Label>
-                                <Input
-                                    id="conversionRate"
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.conversion_rate}
-                                    onChange={(e) => setFormData({ ...formData, conversion_rate: parseFloat(e.target.value) || 1 })}
-                                />
-                            </div>
                             <div className="col-span-2 flex gap-2">
                                 <Button onClick={handleSaveIngredient} className="flex-1">
                                     {editingIngredient ? 'Update' : 'Add'}
                                 </Button>
-                                <Button onClick={() => { setIsDialogOpen(false); setIsAdding(false); setEditingIngredient(null); setFormData({ description: '', cost_price: 0, min_stock_lvl: 0, max_stock_lvl: 0, usage_unit_id: null, base_stock_qty: 0, local_cost: 0, conversion_rate: 1 }); }} variant="outline" className="flex-1">
+                                <Button onClick={() => { setIsDialogOpen(false); setIsAdding(false); setEditingIngredient(null); setFormData({ description: '', cost_price: 0, min_stock_lvl: 0, max_stock_lvl: 0, usage_unit_id: null, base_stock_qty: 0 }); }} variant="outline" className="flex-1">
                                     Cancel
                                 </Button>
                             </div>
@@ -925,16 +991,8 @@ function IngredientsTab({ ingredients, units, loadInventoryData }: { ingredients
 function RecipesTab({ products, ingredients, units, loadInventoryData }: { products: any[], ingredients: any[], units: UnitMasterResponse[], loadInventoryData: () => Promise<void> }) {
     const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
     const [recipes, setRecipes] = useState<ProductsRecipeResponse[]>([]);
-    const [isAdding, setIsAdding] = useState(false);
-    const [editingRecipe, setEditingRecipe] = useState<ProductsRecipeResponse | null>(null);
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [formData, setFormData] = useState({
-        ingredient_id: 0,
-        usage_qty: 0,
-        usage_uom_code: '',
-        actual_usage: 0,
-        cost: 0,
-    });
+    const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
+    const [bulkLines, setBulkLines] = useState<BulkRecipeLine[]>([]);
 
     const loadRecipes = async (productId: number) => {
         const recipeData = await getProductRecipe(productId);
@@ -947,74 +1005,69 @@ function RecipesTab({ products, ingredients, units, loadInventoryData }: { produ
         loadRecipes(id);
     };
 
-    const handleAddRecipe = async () => {
-        setIsAdding(true);
-        setEditingRecipe(null);
-        setFormData({ ingredient_id: 0, usage_qty: 0, usage_uom_code: '', actual_usage: 0, cost: 0 });
-        setIsDialogOpen(true);
+    const handleOpenBulkBuilder = () => {
+        if (!selectedProductId) return;
+        const lines: BulkRecipeLine[] = recipes.map(r => ({
+            id: r.id,
+            ingredient_id: r.ingredient_id,
+            usage_qty: r.usage_qty,
+            usage_uom_code: r.usage_uom_code,
+            cost: r.cost,
+            isNew: false,
+            isDeleted: false,
+        }));
+        setBulkLines(lines);
+        setIsBulkDialogOpen(true);
     };
 
-    const handleSaveRecipe = async () => {
-        if (!selectedProductId || formData.ingredient_id === 0) {
-            toast.error('Please select a product and ingredient');
+    const handleAddBulkLine = () => {
+        setBulkLines(prev => [...prev, {
+            ingredient_id: 0,
+            usage_qty: 0,
+            usage_uom_code: '',
+            cost: 0,
+            isNew: true,
+            isDeleted: false,
+        }]);
+    };
+
+    const handleUpdateBulkLine = (index: number, field: keyof BulkRecipeLine, value: number | string) => {
+        setBulkLines(prev => prev.map((line, i) => {
+            if (i !== index) return line;
+            const updated = { ...line, [field]: value };
+            if (field === 'ingredient_id' || field === 'usage_qty') {
+                const ingredient = ingredients.find((ing: any) => ing.id === updated.ingredient_id);
+                const costPrice = ingredient ? ingredient.cost_price : 0;
+                const baseStockQty = ingredient ? (ingredient.base_stock_qty || 1) : 1;
+                const unitCost = baseStockQty > 0 ? costPrice / baseStockQty : costPrice;
+                updated.cost = updated.usage_qty * unitCost;
+            }
+            return updated;
+        }));
+    };
+
+    const handleRemoveBulkLine = (index: number) => {
+        setBulkLines(prev => prev.map((line, i) => i === index ? { ...line, isDeleted: true } : line));
+    };
+
+    const handleSaveBulk = async () => {
+        if (!selectedProductId) return;
+
+        const validLines = bulkLines.filter(line => line.ingredient_id !== 0 && !line.isDeleted);
+        if (validLines.length === 0) {
+            toast.error('Please add at least one valid recipe line');
             return;
         }
 
         try {
-            if (editingRecipe) {
-                const data: UpdateRecipeRequest = {
-                    id: editingRecipe.id,
-                    product_id: editingRecipe.product_id,
-                    ingredient_id: formData.ingredient_id,
-                    usage_qty: formData.usage_qty,
-                    usage_uom_code: formData.usage_uom_code,
-                    actual_usage: formData.actual_usage,
-                    cost: formData.cost,
-                };
-                await updateRecipe(data);
-                toast.success('Recipe ingredient updated successfully');
-            } else {
-                const data: CreateRecipeRequest = {
-                    product_id: selectedProductId,
-                    ingredient_id: formData.ingredient_id,
-                    usage_qty: formData.usage_qty,
-                    usage_uom_code: formData.usage_uom_code,
-                    actual_usage: formData.actual_usage,
-                    cost: formData.cost,
-                };
-                await createRecipe(data);
-                toast.success('Recipe ingredient added successfully');
-            }
-            setFormData({ ingredient_id: 0, usage_qty: 0, usage_uom_code: '', actual_usage: 0, cost: 0 });
-            setIsAdding(false);
-            setEditingRecipe(null);
-            setIsDialogOpen(false);
-            if (selectedProductId) loadRecipes(selectedProductId);
+            const result = await saveRecipeBulk(selectedProductId, bulkLines);
+            setRecipes(result);
+            setIsBulkDialogOpen(false);
+            setBulkLines([]);
+            toast.success('Recipe saved successfully');
+            loadInventoryData();
         } catch (error) {
-            toast.error(editingRecipe ? 'Failed to update recipe ingredient' : 'Failed to add recipe ingredient');
-            console.error(error);
-        }
-    };
-
-    const handleEditRecipe = (recipe: ProductsRecipeResponse) => {
-        setEditingRecipe(recipe);
-        setFormData({
-            ingredient_id: recipe.ingredient_id,
-            usage_qty: recipe.usage_qty,
-            usage_uom_code: recipe.usage_uom_code,
-            actual_usage: recipe.actual_usage,
-            cost: recipe.cost,
-        });
-        setIsDialogOpen(true);
-    };
-
-    const handleDeleteRecipe = async (recipeId: number) => {
-        try {
-            await deleteRecipe(recipeId);
-            toast.success('Recipe ingredient deleted successfully');
-            if (selectedProductId) loadRecipes(selectedProductId);
-        } catch (error) {
-            toast.error('Failed to delete recipe ingredient');
+            toast.error('Failed to save recipe');
             console.error(error);
         }
     };
@@ -1053,6 +1106,8 @@ function RecipesTab({ products, ingredients, units, loadInventoryData }: { produ
         return unit ? unit.unit_description : unitCode;
     };
 
+    const activeLines = bulkLines.filter(line => !line.isDeleted);
+
     return (
         <Card>
             <CardContent>
@@ -1080,136 +1135,128 @@ function RecipesTab({ products, ingredients, units, loadInventoryData }: { produ
                                     <Button onClick={handleRecalculateCost} variant="outline">Recalculate Cost</Button>
                                     <Button onClick={handleUpdatePrice} variant="outline">Update Price</Button>
                                 </div>
-                                <Button onClick={handleAddRecipe}>Add Ingredient</Button>
+                                <Button onClick={handleOpenBulkBuilder}>Edit Recipe</Button>
                             </div>
                         )}
                     </div>
 
                     {selectedProductId && (
-                        <>
-                            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                                    <DialogHeader>
-                                        <DialogTitle>{editingRecipe ? 'Edit Recipe Ingredient' : 'Add Recipe Ingredient'}</DialogTitle>
-                                        <DialogDescription>
-                                            {editingRecipe ? 'Update the recipe ingredient details below.' : 'Fill in the details to add a new recipe ingredient.'}
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="grid grid-cols-2 gap-4 p-4">
-                                        <div>
-                                            <Label htmlFor="ingredientSelect">Ingredient</Label>
-                                            <select
-                                                id="ingredientSelect"
-                                                className="w-full mt-1 p-2 border rounded-md"
-                                                value={formData.ingredient_id}
-                                                onChange={(e) => setFormData({ ...formData, ingredient_id: parseInt(e.target.value) })}
-                                            >
-                                                <option value="0">-- Select Ingredient --</option>
-                                                {ingredients.map((ingredient) => (
-                                                    <option key={ingredient.id} value={ingredient.id}>
-                                                        {ingredient.description}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <Label htmlFor="usageQty">Usage Qty</Label>
-                                            <Input
-                                                id="usageQty"
-                                                type="number"
-                                                step="0.01"
-                                                value={formData.usage_qty}
-                                                onChange={(e) => setFormData({ ...formData, usage_qty: parseFloat(e.target.value) || 0 })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label htmlFor="usageUom">Unit</Label>
-                                            <select
-                                                id="usageUom"
-                                                className="w-full mt-1 p-2 border rounded-md"
-                                                value={formData.usage_uom_code}
-                                                onChange={(e) => setFormData({ ...formData, usage_uom_code: e.target.value })}
-                                            >
-                                                <option value="">-- Select Unit --</option>
-                                                {units.map((unit) => (
-                                                    <option key={unit.id} value={unit.unit_code}>
-                                                        {unit.unit_description}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <Label htmlFor="actualUsage">Actual Usage</Label>
-                                            <Input
-                                                id="actualUsage"
-                                                type="number"
-                                                step="0.01"
-                                                value={formData.actual_usage}
-                                                onChange={(e) => setFormData({ ...formData, actual_usage: parseFloat(e.target.value) || 0 })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <Label htmlFor="cost">Cost</Label>
-                                            <Input
-                                                id="cost"
-                                                type="number"
-                                                step="0.01"
-                                                value={formData.cost}
-                                                onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) || 0 })}
-                                            />
-                                        </div>
-                                        <div className="col-span-2 flex gap-2">
-                                            <Button onClick={handleSaveRecipe} className="flex-1">
-                                                {editingRecipe ? 'Update' : 'Add'}
-                                            </Button>
-                                            <Button onClick={() => { setIsDialogOpen(false); setIsAdding(false); setEditingRecipe(null); setFormData({ ingredient_id: 0, usage_qty: 0, usage_uom_code: '', actual_usage: 0, cost: 0 }); }} variant="outline" className="flex-1">
-                                                Cancel
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </DialogContent>
-                            </Dialog>
-
-                            <div className="h-121 overflow-y-auto border rounded-md">
-                                <Table>
-                                    <TableHeader className="bg-slate-100">
-                                        <TableRow>
-                                            <TableHead className="font-bold text-slate-900">Ingredient</TableHead>
-                                            <TableHead className="font-bold text-slate-900">Usage Qty</TableHead>
-                                            <TableHead className="font-bold text-slate-900">Unit</TableHead>
-                                            <TableHead className="font-bold text-slate-900">Actual Usage</TableHead>
-                                            <TableHead className="font-bold text-slate-900">Cost</TableHead>
-                                            <TableHead className="font-bold text-slate-900">Actions</TableHead>
+                        <div className="h-121 overflow-y-auto border rounded-md">
+                            <Table>
+                                <TableHeader className="bg-slate-100">
+                                    <TableRow>
+                                        <TableHead className="font-bold text-slate-900">Ingredient</TableHead>
+                                        <TableHead className="font-bold text-slate-900">Usage Qty</TableHead>
+                                        <TableHead className="font-bold text-slate-900">Unit</TableHead>
+                                        <TableHead className="font-bold text-slate-900">Cost</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {recipes.map((recipe) => (
+                                        <TableRow key={recipe.id}>
+                                            <TableCell className="font-medium">{getIngredientName(recipe.ingredient_id)}</TableCell>
+                                            <TableCell>{recipe.usage_qty}</TableCell>
+                                            <TableCell>{getUnitDescription(recipe.usage_uom_code)}</TableCell>
+                                            <TableCell>₱{recipe.cost.toFixed(2)}</TableCell>
                                         </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {recipes.map((recipe) => (
-                                            <TableRow key={recipe.id}>
-                                                <TableCell className="font-medium">{getIngredientName(recipe.ingredient_id)}</TableCell>
-                                                <TableCell>{recipe.usage_qty}</TableCell>
-                                                <TableCell>{getUnitDescription(recipe.usage_uom_code)}</TableCell>
-                                                <TableCell>{recipe.actual_usage}</TableCell>
-                                                <TableCell>₱{recipe.cost.toFixed(2)}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex gap-2">
-                                                        <Button onClick={() => handleEditRecipe(recipe)} size="sm" variant="outline">Edit</Button>
-                                                        <Button onClick={() => handleDeleteRecipe(recipe.id)} size="sm" variant="destructive">Delete</Button>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {recipes.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={6} className="text-center text-muted-foreground">
-                                                    No recipe ingredients found for this product
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </>
+                                    ))}
+                                    {recipes.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center text-muted-foreground">
+                                                No recipe ingredients found for this product
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
                     )}
+
+                    <Dialog open={isBulkDialogOpen} onOpenChange={setIsBulkDialogOpen}>
+                        <DialogContent className="!w-[95vw] !max-w-none max-h-[vh] overflow-y-auto">
+                            <DialogHeader>
+                                <DialogTitle>Edit Recipe</DialogTitle>
+                                <DialogDescription>
+                                    Add, edit, or remove ingredients for this product. Save all changes at once.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                                <div className="overflow-x-auto h-[400px] border rounded-md">
+                                    <Table>
+                                        <TableHeader className="bg-slate-100">
+                                            <TableRow>
+                                                <TableHead className="font-bold text-slate-900">Ingredient</TableHead>
+                                                <TableHead className="font-bold text-slate-900">Usage Qty</TableHead>
+                                                <TableHead className="font-bold text-slate-900">Unit</TableHead>
+                                                <TableHead className="font-bold text-slate-900">Cost</TableHead>
+                                                <TableHead className="font-bold text-slate-900 w-24"></TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {activeLines.map((line, index) => (
+                                                <TableRow key={index}>
+                                                    <TableCell>
+                                                        <select
+                                                            className="w-full p-1 border rounded text-sm"
+                                                            value={line.ingredient_id}
+                                                            onChange={(e) => handleUpdateBulkLine(index, 'ingredient_id', parseInt(e.target.value))}
+                                                        >
+                                                            <option value="0">-- Select --</option>
+                                                            {ingredients.map((ing) => (
+                                                                <option key={ing.id} value={ing.id}>{ing.description}</option>
+                                                            ))}
+                                                        </select>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Input
+                                                            type="number"
+                                                            step="0.01"
+                                                            className="w-24"
+                                                            value={line.usage_qty}
+                                                            onChange={(e) => handleUpdateBulkLine(index, 'usage_qty', parseFloat(e.target.value) || 0)}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <select
+                                                            className="w-full p-1 border rounded text-sm"
+                                                            value={line.usage_uom_code}
+                                                            onChange={(e) => handleUpdateBulkLine(index, 'usage_uom_code', e.target.value)}
+                                                        >
+                                                            <option value="">-- Select --</option>
+                                                            {units.map((unit) => (
+                                                                <option key={unit.id} value={unit.unit_code}>{unit.unit_description}</option>
+                                                            ))}
+                                                        </select>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className="text-sm font-medium">₱{line.cost.toFixed(2)}</span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Button onClick={() => handleRemoveBulkLine(index)} size="sm" variant="destructive">Remove</Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                            {activeLines.length === 0 && (
+                                                <TableRow>
+                                                    <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
+                                                        No ingredients added. Click "Add Row" to start building the recipe.
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                                
+                                <div className="flex gap-2">
+                                    <div className="w-full">
+                                        <Button onClick={handleAddBulkLine} variant="outline" className="w-80">Add Row</Button>
+                                    </div>
+                                    <Button onClick={handleSaveBulk} className="flex-1">Save Recipe</Button>
+                                    <Button onClick={() => { setIsBulkDialogOpen(false); setBulkLines([]); }} variant="outline" className="flex-1">Cancel</Button>
+                                </div>
+                            </div>
+                        </DialogContent>
+                    </Dialog>
                 </div>
             </CardContent>
         </Card>
