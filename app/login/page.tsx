@@ -140,7 +140,7 @@
                         type="text"
                         placeholder='Enter User ID'
                         value={userId}
-                        onChange={(e) => setUserId(e.target.value)}
+                        onChange={(e) => setUserId(e.target.value.toUpperCase())}
                         maxLength={10}
                         className="mt-2 h-14 text-lg text-center [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
                   />

@@ -269,6 +269,7 @@ export interface CreateProductRequest {
   name: string;
   price: number;
   category_id?: number;
+  recipe_cost: number;
 }
 
 export interface UpdateProductRequest {
@@ -277,6 +278,7 @@ export interface UpdateProductRequest {
   name: string;
   price: number;
   category_id?: number;
+  recipe_cost: number;
 }
 
 export interface CategoryResponse {
@@ -362,6 +364,7 @@ export interface UnitMasterResponse {
   company_id: number;
   unit_code: string;
   unit_description: string;
+  unit_type: string;
 }
 
 export interface CreateUnitMasterRequest {
@@ -393,6 +396,7 @@ export interface IngredientMasterFileResponse {
   usage_unit_id: number | null;
   base_stock_qty: number;
   last_cost: number;
+  preferred_unit_type: string;
 }
 
 export interface CreateIngredientRequest {
@@ -478,13 +482,14 @@ export interface UpdateRecipeRequest {
 
 export interface CsvIngredientRow {
   description: string;
-  cost_price: number;
+  total_cost: number;
   base_stock_qty: number;
   unit_code: string;
   min_stock_lvl: number;
   max_stock_lvl: number;
   last_cost: number;
   ingr_code: string;
+  preferred_unit_type: string;
 }
 
 export interface BatchImportIngredientsRequest {

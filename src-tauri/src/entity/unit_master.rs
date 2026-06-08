@@ -11,6 +11,8 @@ pub struct Model {
     pub unit_code: String,
     #[sea_orm(column_type = "Text")]
     pub unit_description: String,
+    #[sea_orm(column_type = "Text")]
+    pub unit_type: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

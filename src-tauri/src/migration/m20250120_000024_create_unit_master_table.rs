@@ -15,22 +15,23 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(UnitMaster::CompanyId).integer().not_null().default(1))
                     .col(ColumnDef::new(UnitMaster::UnitCode).string().not_null().unique_key())
                     .col(ColumnDef::new(UnitMaster::UnitDescription).string().not_null())
+                    .col(ColumnDef::new(UnitMaster::UnitType).string().not_null().default("weight"))
                     .to_owned(),
             )
             .await?;
 
         let db = manager.get_connection();
         db.execute_unprepared("
-            INSERT OR IGNORE INTO unit_master (unit_code, unit_description) VALUES
-            ('KG', 'Kilogram'),
-            ('G', 'Gram'),
-            ('L', 'Liter'),
-            ('ML', 'Milliliter'),
-            ('PCS', 'Piece'),
-            ('BOX', 'Box'),
-            ('CTN', 'Carton'),
-            ('OZ', 'Ounce'),
-            ('LB', 'Pound');
+            INSERT OR IGNORE INTO unit_master (unit_code, unit_description, unit_type) VALUES
+            ('KG', 'Kilogram', 'weight'),
+            ('G', 'Gram', 'weight'),
+            ('L', 'Liter', 'volume'),
+            ('ML', 'Milliliter', 'volume'),
+            ('PC', 'Piece', 'count'),
+            ('BOX', 'Box', 'count'),
+            ('CTN', 'Carton', 'count'),
+            ('OZ', 'Ounce', 'weight'),
+            ('LB', 'Pound', 'weight');
         ").await?;
 
         Ok(())
@@ -50,4 +51,5 @@ enum UnitMaster {
     CompanyId,
     UnitCode,
     UnitDescription,
+    UnitType,
 }

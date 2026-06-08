@@ -21,6 +21,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(IngredientMasterFile::UsageUnitId).integer())
                     .col(ColumnDef::new(IngredientMasterFile::BaseStockQty).integer().not_null().default(0))
                     .col(ColumnDef::new(IngredientMasterFile::LastCost).double().not_null().default(0))
+                    .col(ColumnDef::new(IngredientMasterFile::PreferredUnitType).string().not_null())
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-ingredient_master_file-usage_unit_id")
@@ -31,6 +32,8 @@ impl MigrationTrait for Migration {
                     .to_owned(),
             )
             .await?;
+            
+
 
         Ok(())
     }
@@ -55,6 +58,7 @@ enum IngredientMasterFile {
     UsageUnitId,
     BaseStockQty,
     LastCost,
+    PreferredUnitType,
 }
 
 #[derive(DeriveIden)]

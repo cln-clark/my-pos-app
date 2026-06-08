@@ -1,7 +1,7 @@
     use crate::entity::{role, user, product, category, discount_code, crr_txn_head, crr_txn_dtl, crr_zx_reading, temp_txn_head, temp_txn_dtl, temp_zx_reading, unit_master, ingredient_master_file, conversion_file, products_recipe};
     use crate::AppState;
     use sea_orm::ConnectionTrait;
-    use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, ActiveModelTrait, Set, Statement, TransactionTrait};
+    use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, ActiveModelTrait, Set, Statement, TransactionTrait, PaginatorTrait};
     use serde::{Deserialize, Serialize};
     use tauri::State;
     use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
@@ -241,6 +241,7 @@
         pub name: String,
         pub price: f64,
         pub category_id: Option<i32>,
+        pub recipe_cost: f64,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -250,6 +251,7 @@
         pub name: String,
         pub price: f64,
         pub category_id: Option<i32>,
+        pub recipe_cost: f64,
     }
 
     #[tauri::command]
@@ -261,7 +263,7 @@
             name: Set(data.name),
             price: Set(data.price),
             category_id: Set(data.category_id),
-            recipe_cost: Set(0.0),
+            recipe_cost: Set(data.recipe_cost),
             ..Default::default()
         };
 
@@ -292,6 +294,7 @@
         product.name = Set(data.name);
         product.price = Set(data.price);
         product.category_id = Set(data.category_id);
+        product.recipe_cost = Set(data.recipe_cost);
 
         let product = product.update(&**db).await.map_err(|e| e.to_string())?;
 
@@ -308,6 +311,28 @@
     #[tauri::command]
     pub async fn delete_product(state: State<'_, AppState>, product_id: i32) -> Result<(), String> {
         let db = &state.db;
+
+        // Check if product exists
+        let product = product::Entity::find_by_id(product_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if product.is_none() {
+            return Err("Product not found".to_string());
+        }
+
+        // Check if product has any transactions
+        use crate::entity::crr_txn_dtl;
+        let transaction_count = crr_txn_dtl::Entity::find()
+            .filter(crr_txn_dtl::Column::ProductId.eq(product_id))
+            .count(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if transaction_count > 0 {
+            return Err("Cannot delete product: it has been used in transactions".to_string());
+        }
 
         product::Entity::delete_by_id(product_id)
             .exec(&**db)
@@ -483,6 +508,17 @@
     #[tauri::command]
     pub async fn create_category(state: State<'_, AppState>, data: CreateCategoryRequest) -> Result<CategoryResponse, String> {
         let db = &state.db;
+
+        // Check if category_code already exists
+        let existing_category = category::Entity::find()
+            .filter(category::Column::CategoryCode.eq(&data.category_code))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if existing_category.is_some() {
+            return Err(format!("Category with code '{}' already exists", data.category_code));
+        }
 
         let new_category = category::ActiveModel {
             category_code: Set(data.category_code),
@@ -1917,6 +1953,7 @@
         pub company_id: i32,
         pub unit_code: String,
         pub unit_description: String,
+        pub unit_type: String,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1941,6 +1978,7 @@
                 company_id: u.company_id,
                 unit_code: u.unit_code,
                 unit_description: u.unit_description,
+                unit_type: u.unit_type,
             })
             .collect();
 
@@ -1968,6 +2006,7 @@
             company_id: result.company_id,
             unit_code: result.unit_code,
             unit_description: result.unit_description,
+            unit_type: result.unit_type,
         })
     }
 
@@ -1984,6 +2023,7 @@
         pub usage_unit_id: Option<i32>,
         pub base_stock_qty: i32,
         pub last_cost: f64,
+        pub preferred_unit_type: String,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -2016,13 +2056,14 @@
     #[derive(Debug, Serialize, Deserialize)]
     pub struct CsvIngredientRow {
         pub description: String,
-        pub cost_price: f64,
+        pub total_cost: f64,
         pub base_stock_qty: i32,
         pub unit_code: String,
         pub min_stock_lvl: i32,
         pub max_stock_lvl: i32,
         pub last_cost: f64,
         pub ingr_code: String,
+        pub preferred_unit_type: String,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -2052,6 +2093,7 @@
                 usage_unit_id: i.usage_unit_id,
                 base_stock_qty: i.base_stock_qty,
                 last_cost: i.last_cost,
+                preferred_unit_type: i.preferred_unit_type,
             })
             .collect();
 
@@ -2103,6 +2145,7 @@
             usage_unit_id: result.usage_unit_id,
             base_stock_qty: result.base_stock_qty,
             last_cost: result.last_cost,
+            preferred_unit_type: result.preferred_unit_type,
         })
     }
 
@@ -2169,6 +2212,7 @@
             usage_unit_id: result.usage_unit_id,
             base_stock_qty: result.base_stock_qty,
             last_cost: result.last_cost,
+            preferred_unit_type: result.preferred_unit_type,
         })
     }
 
@@ -2215,9 +2259,9 @@
         let mut next_id = max_id + 1;
 
         for (index, row) in data.ingredients.iter().enumerate() {
-            if row.description.is_empty() || row.cost_price <= 0.0 {
+            if row.description.is_empty() || row.total_cost <= 0.0 || row.base_stock_qty <= 0 {
                 error_count += 1;
-                errors.push(format!("Row {}: Missing or invalid required fields", index + 1));
+                errors.push(format!("Row {}: Missing or invalid required fields (description, total_cost, base_stock_qty)", index + 1));
                 continue;
             }
 
@@ -2259,21 +2303,27 @@
                 row.ingr_code.clone()
             };
 
-            let base_stock_qty = if row.base_stock_qty > 0 { row.base_stock_qty } else { 0 };
+            let base_stock_qty = row.base_stock_qty;
             let min_stock_lvl = if row.min_stock_lvl > 0 { row.min_stock_lvl } else { 10 };
             let max_stock_lvl = if row.max_stock_lvl > 0 { row.max_stock_lvl } else { 100 };
-            let last_cost = if row.last_cost > 0.0 { row.last_cost } else { row.cost_price };
+
+            // Compute cost_price from total_cost and base_stock_qty
+            let cost_price = row.total_cost / base_stock_qty as f64;
+
+            // Use provided last_cost, or default to computed cost_price
+            let last_cost = if row.last_cost > 0.0 { row.last_cost } else { cost_price };
 
             let new_ingredient = ingredient_master_file::ActiveModel {
                 company_id: Set(1),
                 ingr_code: Set(ingr_code),
                 description: Set(row.description.clone()),
-                cost_price: Set(row.cost_price),
+                cost_price: Set(cost_price),
                 min_stock_lvl: Set(min_stock_lvl),
                 max_stock_lvl: Set(max_stock_lvl),
                 usage_unit_id: Set(usage_unit_id),
                 base_stock_qty: Set(base_stock_qty),
                 last_cost: Set(last_cost),
+                preferred_unit_type: Set(if row.preferred_unit_type.is_empty() { "weight".to_string() } else { row.preferred_unit_type.clone() }),
                 ..Default::default()
             };
 
@@ -2487,7 +2537,6 @@
         let total_cost: f64 = recipes.iter().map(|r| r.cost).sum();
         let mut product_active: product::ActiveModel = product.into();
         product_active.recipe_cost = Set(total_cost);
-        product_active.price = Set(total_cost);
         product_active.update(&**db).await.map_err(|e| e.to_string())?;
 
         Ok(ProductsRecipeResponse {
@@ -2563,7 +2612,6 @@
         let total_cost: f64 = recipes.iter().map(|r| r.cost).sum();
         let mut product_active: product::ActiveModel = product.into();
         product_active.recipe_cost = Set(total_cost);
-        product_active.price = Set(total_cost);
         product_active.update(&**db).await.map_err(|e| e.to_string())?;
 
         Ok(ProductsRecipeResponse {
@@ -2653,7 +2701,6 @@
 
         let mut product_active: product::ActiveModel = product.into();
         product_active.recipe_cost = Set(total_cost);
-        product_active.price = Set(total_cost);
         product_active.update(&**db).await.map_err(|e| e.to_string())?;
 
         let recipe_responses: Vec<ProductsRecipeResponse> = recipes

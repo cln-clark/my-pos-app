@@ -17,6 +17,8 @@ pub struct Model {
     pub usage_unit_id: Option<i32>,
     pub base_stock_qty: i32,
     pub last_cost: f64,
+    #[sea_orm(column_type = "Text")]
+    pub preferred_unit_type: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
