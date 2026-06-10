@@ -1,4 +1,4 @@
-    use crate::entity::{role, user, product, category, discount_code, crr_txn_head, crr_txn_dtl, crr_zx_reading, temp_txn_head, temp_txn_dtl, temp_zx_reading, unit_master, ingredient_master_file, conversion_file, products_recipe};
+    use crate::entity::{role, user, product, category, discount_code, crr_txn_head, crr_txn_dtl, crr_zx_reading, temp_txn_head, temp_txn_dtl, temp_zx_reading, unit_master, ingredient_master_file, conversion_file, products_recipe, product_variations, recipe_templates, recipe_items, recipe_product_links, bundle, add_on, bundle_item, add_on_item};
     use crate::AppState;
     use sea_orm::ConnectionTrait;
     use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, ActiveModelTrait, Set, Statement, TransactionTrait, PaginatorTrait};
@@ -29,7 +29,7 @@
         pub name: String,
         pub price: f64,
         pub category_id: Option<i32>,
-        pub recipe_cost: f64,
+        pub has_variations: bool,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -37,6 +37,94 @@
         pub id: i32,
         pub category_code: String,
         pub category_name: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct BundleResponse {
+        pub id: i32,
+        pub name: String,
+        pub description: Option<String>,
+        pub price: f64,
+        pub is_active: bool,
+        pub created_at: String,
+        pub updated_at: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct BundleItemResponse {
+        pub id: i32,
+        pub bundle_id: i32,
+        pub product_id: i32,
+        pub product_name: String,
+        pub product_sku: String,
+        pub quantity: i32,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct AddOnResponse {
+        pub id: i32,
+        pub name: String,
+        pub description: Option<String>,
+        pub price: f64,
+        pub is_active: bool,
+        pub created_at: String,
+        pub updated_at: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct AddOnItemResponse {
+        pub id: i32,
+        pub add_on_id: i32,
+        pub product_id: i32,
+        pub product_name: String,
+        pub product_sku: String,
+        pub quantity: i32,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CreateBundleRequest {
+        pub name: String,
+        pub description: Option<String>,
+        pub price: f64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UpdateBundleRequest {
+        pub id: i32,
+        pub name: String,
+        pub description: Option<String>,
+        pub price: f64,
+        pub is_active: bool,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CreateAddOnRequest {
+        pub name: String,
+        pub description: Option<String>,
+        pub price: f64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UpdateAddOnRequest {
+        pub id: i32,
+        pub name: String,
+        pub description: Option<String>,
+        pub price: f64,
+        pub is_active: bool,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct AddBundleItemRequest {
+        pub bundle_id: i32,
+        pub product_id: i32,
+        pub quantity: i32,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct AddAddOnItemRequest {
+        pub add_on_id: i32,
+        pub product_id: i32,
+        pub quantity: i32,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -220,17 +308,27 @@
             .await
             .map_err(|e| e.to_string())?;
 
-        let product_responses: Vec<ProductResponse> = products
-            .into_iter()
-            .map(|p| ProductResponse {
+        let mut product_responses: Vec<ProductResponse> = Vec::new();
+
+        for p in products {
+            // Check if product has variations
+            let has_variations = product_variations::Entity::find()
+                .filter(product_variations::Column::ProductId.eq(p.id))
+                .filter(product_variations::Column::IsActive.eq(true))
+                .count(&**db)
+                .await
+                .map_err(|e| e.to_string())
+                .unwrap_or(0) > 0;
+
+            product_responses.push(ProductResponse {
                 id: p.id,
                 sku: p.sku,
                 name: p.name,
                 price: p.price,
                 category_id: p.category_id,
-                recipe_cost: p.recipe_cost,
-            })
-            .collect();
+                has_variations,
+            });
+        }
 
         Ok(product_responses)
     }
@@ -241,7 +339,6 @@
         pub name: String,
         pub price: f64,
         pub category_id: Option<i32>,
-        pub recipe_cost: f64,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -251,7 +348,6 @@
         pub name: String,
         pub price: f64,
         pub category_id: Option<i32>,
-        pub recipe_cost: f64,
     }
 
     #[tauri::command]
@@ -263,7 +359,6 @@
             name: Set(data.name),
             price: Set(data.price),
             category_id: Set(data.category_id),
-            recipe_cost: Set(data.recipe_cost),
             ..Default::default()
         };
 
@@ -275,7 +370,7 @@
             name: product.name,
             price: product.price,
             category_id: product.category_id,
-            recipe_cost: product.recipe_cost,
+            has_variations: false,
         })
     }
 
@@ -294,9 +389,17 @@
         product.name = Set(data.name);
         product.price = Set(data.price);
         product.category_id = Set(data.category_id);
-        product.recipe_cost = Set(data.recipe_cost);
 
         let product = product.update(&**db).await.map_err(|e| e.to_string())?;
+
+        // Check if product has variations
+        let has_variations = product_variations::Entity::find()
+            .filter(product_variations::Column::ProductId.eq(product.id))
+            .filter(product_variations::Column::IsActive.eq(true))
+            .count(&**db)
+            .await
+            .map_err(|e| e.to_string())
+            .unwrap_or(0) > 0;
 
         Ok(ProductResponse {
             id: product.id,
@@ -304,7 +407,7 @@
             name: product.name,
             price: product.price,
             category_id: product.category_id,
-            recipe_cost: product.recipe_cost,
+            has_variations,
         })
     }
 
@@ -335,6 +438,138 @@
         }
 
         product::Entity::delete_by_id(product_id)
+            .exec(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    // Product Variations Commands
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct ProductVariationResponse {
+        pub id: i32,
+        pub product_id: i32,
+        pub name: String,
+        pub price: f64,
+        pub is_active: bool,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CreateVariationRequest {
+        pub product_id: i32,
+        pub name: String,
+        pub price: f64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UpdateVariationRequest {
+        pub id: i32,
+        pub name: String,
+        pub price: f64,
+        pub is_active: bool,
+    }
+
+    #[tauri::command]
+    pub async fn get_product_variations(state: State<'_, AppState>, product_id: i32) -> Result<Vec<ProductVariationResponse>, String> {
+        let db = &state.db;
+
+        let variations = product_variations::Entity::find()
+            .filter(product_variations::Column::ProductId.eq(product_id))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let variation_responses: Vec<ProductVariationResponse> = variations
+            .into_iter()
+            .map(|v| ProductVariationResponse {
+                id: v.id,
+                product_id: v.product_id,
+                name: v.name,
+                price: v.price,
+                is_active: v.is_active,
+            })
+            .collect();
+
+        Ok(variation_responses)
+    }
+
+    #[tauri::command]
+    pub async fn create_variation(state: State<'_, AppState>, data: CreateVariationRequest) -> Result<ProductVariationResponse, String> {
+        let db = &state.db;
+
+        // Check if product exists
+        let product = product::Entity::find_by_id(data.product_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if product.is_none() {
+            return Err("Product not found".to_string());
+        }
+
+        let new_variation = product_variations::ActiveModel {
+            product_id: Set(data.product_id),
+            name: Set(data.name),
+            price: Set(data.price),
+            is_active: Set(true),
+            ..Default::default()
+        };
+
+        let result = new_variation
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let variation = product_variations::Entity::find_by_id(result.id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Failed to retrieve created variation")?;
+
+        Ok(ProductVariationResponse {
+            id: variation.id,
+            product_id: variation.product_id,
+            name: variation.name,
+            price: variation.price,
+            is_active: variation.is_active,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn update_variation(state: State<'_, AppState>, data: UpdateVariationRequest) -> Result<ProductVariationResponse, String> {
+        let db = &state.db;
+
+        let variation = product_variations::Entity::find_by_id(data.id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Variation not found")?;
+
+        let mut variation: product_variations::ActiveModel = variation.into();
+        variation.name = Set(data.name);
+        variation.price = Set(data.price);
+        variation.is_active = Set(data.is_active);
+
+        let result = variation
+            .update(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(ProductVariationResponse {
+            id: result.id,
+            product_id: result.product_id,
+            name: result.name,
+            price: result.price,
+            is_active: result.is_active,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn delete_variation(state: State<'_, AppState>, variation_id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        product_variations::Entity::delete_by_id(variation_id)
             .exec(&**db)
             .await
             .map_err(|e| e.to_string())?;
@@ -444,7 +679,6 @@
                 name: Set(row.name.clone()),
                 price: Set(row.price),
                 category_id: Set(category_id),
-                recipe_cost: Set(0.0),
                 ..Default::default()
             };
 
@@ -2436,6 +2670,7 @@
         pub ingredient_id: i32,
         pub usage_qty: f64,
         pub usage_uom_code: String,
+        pub variation_id: Option<i32>,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -2445,6 +2680,7 @@
         pub ingredient_id: i32,
         pub usage_qty: f64,
         pub usage_uom_code: String,
+        pub variation_id: Option<i32>,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -2458,6 +2694,7 @@
         pub is_new: bool,
         #[serde(rename = "isDeleted")]
         pub is_deleted: bool,
+        pub variation_id: Option<i32>,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -2467,11 +2704,19 @@
     }
 
     #[tauri::command]
-    pub async fn get_product_recipe(state: State<'_, AppState>, product_id: i32) -> Result<Vec<ProductsRecipeResponse>, String> {
+    pub async fn get_product_recipe(state: State<'_, AppState>, product_id: i32, variation_id: Option<i32>) -> Result<Vec<ProductsRecipeResponse>, String> {
         let db = &state.db;
 
-        let recipes = products_recipe::Entity::find()
-            .filter(products_recipe::Column::ProductId.eq(product_id))
+        let mut query = products_recipe::Entity::find()
+            .filter(products_recipe::Column::ProductId.eq(product_id));
+
+        if let Some(var_id) = variation_id {
+            query = query.filter(products_recipe::Column::VariationId.eq(var_id));
+        } else {
+            query = query.filter(products_recipe::Column::VariationId.is_null());
+        }
+
+        let recipes = query
             .all(&**db)
             .await
             .map_err(|e| e.to_string())?;
@@ -2514,6 +2759,7 @@
             usage_qty: Set(data.usage_qty),
             usage_uom_code: Set(data.usage_uom_code),
             cost: Set(cost),
+            variation_id: Set(data.variation_id),
             ..Default::default()
         };
 
@@ -2529,14 +2775,7 @@
             .await
             .map_err(|e| e.to_string())?
             .ok_or("Product not found")?;
-        let recipes = products_recipe::Entity::find()
-            .filter(products_recipe::Column::ProductId.eq(data.product_id))
-            .all(&**db)
-            .await
-            .map_err(|e| e.to_string())?;
-        let total_cost: f64 = recipes.iter().map(|r| r.cost).sum();
-        let mut product_active: product::ActiveModel = product.into();
-        product_active.recipe_cost = Set(total_cost);
+        let product_active: product::ActiveModel = product.into();
         product_active.update(&**db).await.map_err(|e| e.to_string())?;
 
         Ok(ProductsRecipeResponse {
@@ -2591,6 +2830,7 @@
         recipe_active.usage_qty = Set(data.usage_qty);
         recipe_active.usage_uom_code = Set(data.usage_uom_code);
         recipe_active.cost = Set(cost);
+        recipe_active.variation_id = Set(data.variation_id);
 
         let result = recipe_active
             .update(&**db)
@@ -2604,14 +2844,7 @@
             .await
             .map_err(|e| e.to_string())?
             .ok_or("Product not found")?;
-        let recipes = products_recipe::Entity::find()
-            .filter(products_recipe::Column::ProductId.eq(data.product_id))
-            .all(&**db)
-            .await
-            .map_err(|e| e.to_string())?;
-        let total_cost: f64 = recipes.iter().map(|r| r.cost).sum();
-        let mut product_active: product::ActiveModel = product.into();
-        product_active.recipe_cost = Set(total_cost);
+        let product_active: product::ActiveModel = product.into();
         product_active.update(&**db).await.map_err(|e| e.to_string())?;
 
         Ok(ProductsRecipeResponse {
@@ -2662,6 +2895,7 @@
                         usage_qty: Set(line.usage_qty),
                         usage_uom_code: Set(line.usage_uom_code.clone()),
                         cost: Set(cost),
+                        variation_id: Set(line.variation_id),
                         ..Default::default()
                     };
                     new_recipe.insert(&**db).await.map_err(|e| e.to_string())?;
@@ -2678,6 +2912,7 @@
                     recipe_active.usage_qty = Set(line.usage_qty);
                     recipe_active.usage_uom_code = Set(line.usage_uom_code.clone());
                     recipe_active.cost = Set(cost);
+                    recipe_active.variation_id = Set(line.variation_id);
                     recipe_active.update(&**db).await.map_err(|e| e.to_string())?;
                 }
             }
@@ -2690,8 +2925,6 @@
             .await
             .map_err(|e| e.to_string())?;
 
-        let total_cost: f64 = recipes.iter().map(|r| r.cost).sum();
-
         let product = product::Entity::find()
             .filter(product::Column::Id.eq(data.product_id))
             .one(&**db)
@@ -2699,8 +2932,7 @@
             .map_err(|e| e.to_string())?
             .ok_or("Product not found")?;
 
-        let mut product_active: product::ActiveModel = product.into();
-        product_active.recipe_cost = Set(total_cost);
+        let product_active: product::ActiveModel = product.into();
         product_active.update(&**db).await.map_err(|e| e.to_string())?;
 
         let recipe_responses: Vec<ProductsRecipeResponse> = recipes
@@ -2738,8 +2970,7 @@
             .map_err(|e| e.to_string())?
             .ok_or("Product not found")?;
 
-        let mut product_active: product::ActiveModel = product.into();
-        product_active.recipe_cost = Set(total_cost);
+        let product_active: product::ActiveModel = product.into();
 
         product_active
             .update(&**db)
@@ -2760,8 +2991,16 @@
             .map_err(|e| e.to_string())?
             .ok_or("Product not found")?;
 
+        // Calculate recipe cost from products_recipe table
+        let recipes = products_recipe::Entity::find()
+            .filter(products_recipe::Column::ProductId.eq(product_id))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+        let recipe_cost: f64 = recipes.iter().map(|r| r.cost).sum();
+
         // For now, just set price to recipe_cost (markup to be configured later)
-        let new_price = product.recipe_cost;
+        let new_price = recipe_cost;
 
         let mut product_active: product::ActiveModel = product.into();
         product_active.price = Set(new_price);
@@ -2772,5 +3011,905 @@
             .map_err(|e| e.to_string())?;
 
         Ok(new_price)
+    }
+
+    // Recipe Module Commands
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct RecipeTemplateResponse {
+        pub id: i32,
+        pub name: String,
+        pub description: Option<String>,
+        pub base_cost: f64,
+        pub created_at: String,
+        pub updated_at: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct RecipeItemResponse {
+        pub id: i32,
+        pub recipe_id: i32,
+        pub ingredient_id: i32,
+        pub usage_qty: f64,
+        pub usage_uom_code: String,
+        pub cost: f64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct RecipeLinkResponse {
+        pub id: i32,
+        pub recipe_id: i32,
+        pub product_id: Option<i32>,
+        pub variation_id: Option<i32>,
+        pub is_default: bool,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CreateRecipeTemplateRequest {
+        pub name: String,
+        pub description: Option<String>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UpdateRecipeTemplateRequest {
+        pub id: i32,
+        pub name: String,
+        pub description: Option<String>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct CreateRecipeItemRequest {
+        pub recipe_id: i32,
+        pub ingredient_id: i32,
+        pub usage_qty: f64,
+        pub usage_uom_code: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct UpdateRecipeItemRequest {
+        pub id: i32,
+        pub ingredient_id: i32,
+        pub usage_qty: f64,
+        pub usage_uom_code: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct LinkRecipeRequest {
+        pub recipe_id: i32,
+        pub product_id: Option<i32>,
+        pub variation_id: Option<i32>,
+        pub is_default: bool,
+    }
+
+    #[tauri::command]
+    pub async fn get_recipe_templates(state: State<'_, AppState>) -> Result<Vec<RecipeTemplateResponse>, String> {
+        let db = &state.db;
+
+        let templates = recipe_templates::Entity::find()
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let responses: Vec<RecipeTemplateResponse> = templates
+            .into_iter()
+            .map(|t| RecipeTemplateResponse {
+                id: t.id,
+                name: t.name,
+                description: t.description,
+                base_cost: t.base_cost,
+                created_at: t.created_at.to_string(),
+                updated_at: t.updated_at.to_string(),
+            })
+            .collect();
+
+        Ok(responses)
+    }
+
+    #[tauri::command]
+    pub async fn create_recipe_template(state: State<'_, AppState>, data: CreateRecipeTemplateRequest) -> Result<RecipeTemplateResponse, String> {
+        let db = &state.db;
+
+        let new_template = recipe_templates::ActiveModel {
+            name: Set(data.name),
+            description: Set(data.description),
+            base_cost: Set(0.0),
+            ..Default::default()
+        };
+
+        let result = new_template
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(RecipeTemplateResponse {
+            id: result.id,
+            name: result.name,
+            description: result.description,
+            base_cost: result.base_cost,
+            created_at: result.created_at.to_string(),
+            updated_at: result.updated_at.to_string(),
+        })
+    }
+
+    #[tauri::command]
+    pub async fn update_recipe_template(state: State<'_, AppState>, data: UpdateRecipeTemplateRequest) -> Result<RecipeTemplateResponse, String> {
+        let db = &state.db;
+
+        let template = recipe_templates::Entity::find_by_id(data.id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Recipe template not found")?;
+
+        let mut template: recipe_templates::ActiveModel = template.into();
+        template.name = Set(data.name);
+        template.description = Set(data.description);
+
+        let result = template
+            .update(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(RecipeTemplateResponse {
+            id: result.id,
+            name: result.name,
+            description: result.description,
+            base_cost: result.base_cost,
+            created_at: result.created_at.to_string(),
+            updated_at: result.updated_at.to_string(),
+        })
+    }
+
+    #[tauri::command]
+    pub async fn delete_recipe_template(state: State<'_, AppState>, id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        recipe_templates::Entity::delete_by_id(id)
+            .exec(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub async fn get_recipe_items(state: State<'_, AppState>, recipe_id: i32) -> Result<Vec<RecipeItemResponse>, String> {
+        let db = &state.db;
+
+        let items = recipe_items::Entity::find()
+            .filter(recipe_items::Column::RecipeId.eq(recipe_id))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let responses: Vec<RecipeItemResponse> = items
+            .into_iter()
+            .map(|i| RecipeItemResponse {
+                id: i.id,
+                recipe_id: i.recipe_id,
+                ingredient_id: i.ingredient_id,
+                usage_qty: i.usage_qty,
+                usage_uom_code: i.usage_uom_code,
+                cost: i.cost,
+            })
+            .collect();
+
+        Ok(responses)
+    }
+
+    #[tauri::command]
+    pub async fn add_recipe_item(state: State<'_, AppState>, data: CreateRecipeItemRequest) -> Result<RecipeItemResponse, String> {
+        let db = &state.db;
+
+        let ingredient = ingredient_master_file::Entity::find()
+            .filter(ingredient_master_file::Column::Id.eq(data.ingredient_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Ingredient not found")?;
+
+        let cost = if ingredient.base_stock_qty > 0 {
+            data.usage_qty * (ingredient.cost_price / ingredient.base_stock_qty as f64)
+        } else {
+            data.usage_qty * ingredient.cost_price
+        };
+
+        let new_item = recipe_items::ActiveModel {
+            recipe_id: Set(data.recipe_id),
+            ingredient_id: Set(data.ingredient_id),
+            usage_qty: Set(data.usage_qty),
+            usage_uom_code: Set(data.usage_uom_code),
+            cost: Set(cost),
+            ..Default::default()
+        };
+
+        let result = new_item
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Update recipe base cost
+        let items = recipe_items::Entity::find()
+            .filter(recipe_items::Column::RecipeId.eq(data.recipe_id))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let total_cost: f64 = items.iter().map(|i| i.cost).sum();
+
+        let template = recipe_templates::Entity::find_by_id(data.recipe_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Recipe template not found")?;
+
+        let mut template: recipe_templates::ActiveModel = template.into();
+        template.base_cost = Set(total_cost);
+        template.updated_at = Set(chrono::Utc::now().naive_utc());
+        template.update(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(RecipeItemResponse {
+            id: result.id,
+            recipe_id: result.recipe_id,
+            ingredient_id: result.ingredient_id,
+            usage_qty: result.usage_qty,
+            usage_uom_code: result.usage_uom_code,
+            cost: result.cost,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn update_recipe_item(state: State<'_, AppState>, data: UpdateRecipeItemRequest) -> Result<RecipeItemResponse, String> {
+        let db = &state.db;
+
+        let item = recipe_items::Entity::find_by_id(data.id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Recipe item not found")?;
+
+        let ingredient = ingredient_master_file::Entity::find()
+            .filter(ingredient_master_file::Column::Id.eq(data.ingredient_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Ingredient not found")?;
+
+        let cost = if ingredient.base_stock_qty > 0 {
+            data.usage_qty * (ingredient.cost_price / ingredient.base_stock_qty as f64)
+        } else {
+            data.usage_qty * ingredient.cost_price
+        };
+
+        let mut item: recipe_items::ActiveModel = item.into();
+        item.ingredient_id = Set(data.ingredient_id);
+        item.usage_qty = Set(data.usage_qty);
+        item.usage_uom_code = Set(data.usage_uom_code);
+        item.cost = Set(cost);
+
+        let result = item
+            .update(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Update recipe base cost
+        let items = recipe_items::Entity::find()
+            .filter(recipe_items::Column::RecipeId.eq(result.recipe_id))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let total_cost: f64 = items.iter().map(|i| i.cost).sum();
+
+        let template = recipe_templates::Entity::find_by_id(result.recipe_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Recipe template not found")?;
+
+        let mut template: recipe_templates::ActiveModel = template.into();
+        template.base_cost = Set(total_cost);
+        template.updated_at = Set(chrono::Utc::now().naive_utc());
+        template.update(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(RecipeItemResponse {
+            id: result.id,
+            recipe_id: result.recipe_id,
+            ingredient_id: result.ingredient_id,
+            usage_qty: result.usage_qty,
+            usage_uom_code: result.usage_uom_code,
+            cost: result.cost,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn delete_recipe_item(state: State<'_, AppState>, id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        let item = recipe_items::Entity::find_by_id(id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Recipe item not found")?;
+
+        let recipe_id = item.recipe_id;
+
+        recipe_items::Entity::delete_by_id(id)
+            .exec(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Update recipe base cost
+        let items = recipe_items::Entity::find()
+            .filter(recipe_items::Column::RecipeId.eq(recipe_id))
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let total_cost: f64 = items.iter().map(|i| i.cost).sum();
+
+        let template = recipe_templates::Entity::find_by_id(recipe_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Recipe template not found")?;
+
+        let mut template: recipe_templates::ActiveModel = template.into();
+        template.base_cost = Set(total_cost);
+        template.updated_at = Set(chrono::Utc::now().naive_utc());
+        template.update(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub async fn link_recipe(state: State<'_, AppState>, data: LinkRecipeRequest) -> Result<RecipeLinkResponse, String> {
+        let db = &state.db;
+
+        if data.product_id.is_none() && data.variation_id.is_none() {
+            return Err("Must link to either product or variation".to_string());
+        }
+
+        let new_link = recipe_product_links::ActiveModel {
+            recipe_id: Set(data.recipe_id),
+            product_id: Set(data.product_id),
+            variation_id: Set(data.variation_id),
+            is_default: Set(data.is_default),
+            ..Default::default()
+        };
+
+        let result = new_link
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(RecipeLinkResponse {
+            id: result.id,
+            recipe_id: result.recipe_id,
+            product_id: result.product_id,
+            variation_id: result.variation_id,
+            is_default: result.is_default,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn unlink_recipe(state: State<'_, AppState>, id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        recipe_product_links::Entity::delete_by_id(id)
+            .exec(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub async fn get_product_recipe_link(state: State<'_, AppState>, product_id: i32) -> Result<Option<RecipeLinkResponse>, String> {
+        let db = &state.db;
+
+        let link = recipe_product_links::Entity::find()
+            .filter(recipe_product_links::Column::ProductId.eq(product_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(link.map(|l| RecipeLinkResponse {
+            id: l.id,
+            recipe_id: l.recipe_id,
+            product_id: l.product_id,
+            variation_id: l.variation_id,
+            is_default: l.is_default,
+        }))
+    }
+
+    #[tauri::command]
+    pub async fn get_variation_recipe_link(state: State<'_, AppState>, variation_id: i32) -> Result<Option<RecipeLinkResponse>, String> {
+        let db = &state.db;
+
+        let link = recipe_product_links::Entity::find()
+            .filter(recipe_product_links::Column::VariationId.eq(variation_id))
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(link.map(|l| RecipeLinkResponse {
+            id: l.id,
+            recipe_id: l.recipe_id,
+            product_id: l.product_id,
+            variation_id: l.variation_id,
+            is_default: l.is_default,
+        }))
+    }
+
+    #[tauri::command]
+    pub async fn calculate_recipe_cost(state: State<'_, AppState>, recipe_id: i32) -> Result<f64, String> {
+        let db = &state.db;
+
+        let template = recipe_templates::Entity::find_by_id(recipe_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Recipe template not found")?;
+
+        Ok(template.base_cost)
+    }
+
+    #[tauri::command]
+    pub async fn calculate_recipe_margin(state: State<'_, AppState>, recipe_id: i32, selling_price: f64) -> Result<f64, String> {
+        let db = &state.db;
+
+        let template = recipe_templates::Entity::find_by_id(recipe_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Recipe template not found")?;
+
+        Ok(selling_price - template.base_cost)
+    }
+
+    #[tauri::command]
+    pub async fn calculate_food_cost_percentage(state: State<'_, AppState>, recipe_id: i32, selling_price: f64) -> Result<f64, String> {
+        let db = &state.db;
+
+        let template = recipe_templates::Entity::find_by_id(recipe_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Recipe template not found")?;
+
+        if selling_price <= 0.0 {
+            return Err("Selling price must be greater than 0".to_string());
+        }
+
+        Ok((template.base_cost / selling_price) * 100.0)
+    }
+
+    // Bundle CRUD Commands
+    #[tauri::command]
+    pub async fn get_bundles(state: State<'_, AppState>) -> Result<Vec<BundleResponse>, String> {
+        let db = &state.db;
+
+        let bundles = bundle::Entity::find()
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let bundle_responses: Vec<BundleResponse> = bundles
+            .into_iter()
+            .map(|b| BundleResponse {
+                id: b.id,
+                name: b.name,
+                description: b.description,
+                price: b.price,
+                is_active: b.is_active,
+                created_at: b.created_at.to_string(),
+                updated_at: b.updated_at.to_string(),
+            })
+            .collect();
+
+        Ok(bundle_responses)
+    }
+
+    #[tauri::command]
+    pub async fn get_bundle_with_items(state: State<'_, AppState>, bundle_id: i32) -> Result<(BundleResponse, Vec<BundleItemResponse>), String> {
+        let db = &state.db;
+
+        let bundle = bundle::Entity::find_by_id(bundle_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Bundle not found".to_string())?;
+
+        let bundle_response = BundleResponse {
+            id: bundle.id,
+            name: bundle.name,
+            description: bundle.description,
+            price: bundle.price,
+            is_active: bundle.is_active,
+            created_at: bundle.created_at.to_string(),
+            updated_at: bundle.updated_at.to_string(),
+        };
+
+        let bundle_items = bundle_item::Entity::find()
+            .filter(bundle_item::Column::BundleId.eq(bundle_id))
+            .find_also_related(product::Entity)
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let item_responses: Vec<BundleItemResponse> = bundle_items
+            .into_iter()
+            .filter_map(|(item, product_opt)| {
+                let product = product_opt?;
+                Some(BundleItemResponse {
+                    id: item.id,
+                    bundle_id: item.bundle_id,
+                    product_id: item.product_id,
+                    product_name: product.name,
+                    product_sku: product.sku,
+                    quantity: item.quantity,
+                })
+            })
+            .collect();
+
+        Ok((bundle_response, item_responses))
+    }
+
+    #[tauri::command]
+    pub async fn create_bundle(state: State<'_, AppState>, data: CreateBundleRequest) -> Result<BundleResponse, String> {
+        let db = &state.db;
+
+        let new_bundle = bundle::ActiveModel {
+            name: Set(data.name),
+            description: Set(data.description),
+            price: Set(data.price),
+            is_active: Set(true),
+            ..Default::default()
+        };
+
+        let result = new_bundle
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(BundleResponse {
+            id: result.id,
+            name: result.name,
+            description: result.description,
+            price: result.price,
+            is_active: result.is_active,
+            created_at: result.created_at.to_string(),
+            updated_at: result.updated_at.to_string(),
+        })
+    }
+
+    #[tauri::command]
+    pub async fn update_bundle(state: State<'_, AppState>, data: UpdateBundleRequest) -> Result<BundleResponse, String> {
+        let db = &state.db;
+
+        let bundle = bundle::Entity::find_by_id(data.id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Bundle not found".to_string())?;
+
+        let mut bundle: bundle::ActiveModel = bundle.into();
+        bundle.name = Set(data.name);
+        bundle.description = Set(data.description);
+        bundle.price = Set(data.price);
+        bundle.is_active = Set(data.is_active);
+        bundle.updated_at = Set(chrono::Utc::now().naive_utc());
+
+        let result = bundle
+            .update(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(BundleResponse {
+            id: result.id,
+            name: result.name,
+            description: result.description,
+            price: result.price,
+            is_active: result.is_active,
+            created_at: result.created_at.to_string(),
+            updated_at: result.updated_at.to_string(),
+        })
+    }
+
+    #[tauri::command]
+    pub async fn delete_bundle(state: State<'_, AppState>, bundle_id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        let bundle = bundle::Entity::find_by_id(bundle_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Bundle not found".to_string())?;
+
+        let bundle: bundle::ActiveModel = bundle.into();
+        bundle.delete(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub async fn add_bundle_item(state: State<'_, AppState>, data: AddBundleItemRequest) -> Result<BundleItemResponse, String> {
+        let db = &state.db;
+
+        let product = product::Entity::find_by_id(data.product_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Product not found".to_string())?;
+
+        let new_item = bundle_item::ActiveModel {
+            bundle_id: Set(data.bundle_id),
+            product_id: Set(data.product_id),
+            quantity: Set(data.quantity),
+            ..Default::default()
+        };
+
+        let result = new_item
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(BundleItemResponse {
+            id: result.id,
+            bundle_id: result.bundle_id,
+            product_id: result.product_id,
+            product_name: product.name,
+            product_sku: product.sku,
+            quantity: result.quantity,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn remove_bundle_item(state: State<'_, AppState>, item_id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        let item = bundle_item::Entity::find_by_id(item_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Bundle item not found".to_string())?;
+
+        let item: bundle_item::ActiveModel = item.into();
+        item.delete(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub async fn update_bundle_item(state: State<'_, AppState>, item_id: i32, quantity: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        let item = bundle_item::Entity::find_by_id(item_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Bundle item not found".to_string())?;
+
+        let mut item: bundle_item::ActiveModel = item.into();
+        item.quantity = Set(quantity);
+
+        item.update(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    // Add-on CRUD Commands
+    #[tauri::command]
+    pub async fn get_add_ons(state: State<'_, AppState>) -> Result<Vec<AddOnResponse>, String> {
+        let db = &state.db;
+
+        let add_ons = add_on::Entity::find()
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let add_on_responses: Vec<AddOnResponse> = add_ons
+            .into_iter()
+            .map(|a| AddOnResponse {
+                id: a.id,
+                name: a.name,
+                description: a.description,
+                price: a.price,
+                is_active: a.is_active,
+                created_at: a.created_at.to_string(),
+                updated_at: a.updated_at.to_string(),
+            })
+            .collect();
+
+        Ok(add_on_responses)
+    }
+
+    #[tauri::command]
+    pub async fn get_add_on_with_items(state: State<'_, AppState>, add_on_id: i32) -> Result<(AddOnResponse, Vec<AddOnItemResponse>), String> {
+        let db = &state.db;
+
+        let add_on = add_on::Entity::find_by_id(add_on_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Add-on not found".to_string())?;
+
+        let add_on_response = AddOnResponse {
+            id: add_on.id,
+            name: add_on.name,
+            description: add_on.description,
+            price: add_on.price,
+            is_active: add_on.is_active,
+            created_at: add_on.created_at.to_string(),
+            updated_at: add_on.updated_at.to_string(),
+        };
+
+        let add_on_items = add_on_item::Entity::find()
+            .filter(add_on_item::Column::AddOnId.eq(add_on_id))
+            .find_also_related(product::Entity)
+            .all(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let item_responses: Vec<AddOnItemResponse> = add_on_items
+            .into_iter()
+            .filter_map(|(item, product_opt)| {
+                let product = product_opt?;
+                Some(AddOnItemResponse {
+                    id: item.id,
+                    add_on_id: item.add_on_id,
+                    product_id: item.product_id,
+                    product_name: product.name,
+                    product_sku: product.sku,
+                    quantity: item.quantity,
+                })
+            })
+            .collect();
+
+        Ok((add_on_response, item_responses))
+    }
+
+    #[tauri::command]
+    pub async fn create_add_on(state: State<'_, AppState>, data: CreateAddOnRequest) -> Result<AddOnResponse, String> {
+        let db = &state.db;
+
+        let new_add_on = add_on::ActiveModel {
+            name: Set(data.name),
+            description: Set(data.description),
+            price: Set(data.price),
+            is_active: Set(true),
+            ..Default::default()
+        };
+
+        let result = new_add_on
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(AddOnResponse {
+            id: result.id,
+            name: result.name,
+            description: result.description,
+            price: result.price,
+            is_active: result.is_active,
+            created_at: result.created_at.to_string(),
+            updated_at: result.updated_at.to_string(),
+        })
+    }
+
+    #[tauri::command]
+    pub async fn update_add_on(state: State<'_, AppState>, data: UpdateAddOnRequest) -> Result<AddOnResponse, String> {
+        let db = &state.db;
+
+        let add_on = add_on::Entity::find_by_id(data.id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Add-on not found".to_string())?;
+
+        let mut add_on: add_on::ActiveModel = add_on.into();
+        add_on.name = Set(data.name);
+        add_on.description = Set(data.description);
+        add_on.price = Set(data.price);
+        add_on.is_active = Set(data.is_active);
+        add_on.updated_at = Set(chrono::Utc::now().naive_utc());
+
+        let result = add_on
+            .update(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(AddOnResponse {
+            id: result.id,
+            name: result.name,
+            description: result.description,
+            price: result.price,
+            is_active: result.is_active,
+            created_at: result.created_at.to_string(),
+            updated_at: result.updated_at.to_string(),
+        })
+    }
+
+    #[tauri::command]
+    pub async fn delete_add_on(state: State<'_, AppState>, add_on_id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        let add_on = add_on::Entity::find_by_id(add_on_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Add-on not found".to_string())?;
+
+        let add_on: add_on::ActiveModel = add_on.into();
+        add_on.delete(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub async fn add_add_on_item(state: State<'_, AppState>, data: AddAddOnItemRequest) -> Result<AddOnItemResponse, String> {
+        let db = &state.db;
+
+        let product = product::Entity::find_by_id(data.product_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Product not found".to_string())?;
+
+        let new_item = add_on_item::ActiveModel {
+            add_on_id: Set(data.add_on_id),
+            product_id: Set(data.product_id),
+            quantity: Set(data.quantity),
+            ..Default::default()
+        };
+
+        let result = new_item
+            .insert(&**db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(AddOnItemResponse {
+            id: result.id,
+            add_on_id: result.add_on_id,
+            product_id: result.product_id,
+            product_name: product.name,
+            product_sku: product.sku,
+            quantity: result.quantity,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn remove_add_on_item(state: State<'_, AppState>, item_id: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        let item = add_on_item::Entity::find_by_id(item_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Add-on item not found".to_string())?;
+
+        let item: add_on_item::ActiveModel = item.into();
+        item.delete(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub async fn update_add_on_item(state: State<'_, AppState>, item_id: i32, quantity: i32) -> Result<(), String> {
+        let db = &state.db;
+
+        let item = add_on_item::Entity::find_by_id(item_id)
+            .one(&**db)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Add-on item not found".to_string())?;
+
+        let mut item: add_on_item::ActiveModel = item.into();
+        item.quantity = Set(quantity);
+
+        item.update(&**db).await.map_err(|e| e.to_string())?;
+
+        Ok(())
     }
 

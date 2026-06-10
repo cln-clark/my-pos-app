@@ -9,6 +9,14 @@ export interface User {
 }
 
 // Products and Inventory
+export interface ProductVariation {
+  id: number;
+  product_id: number;
+  name: string;
+  price: number;
+  is_active: boolean;
+}
+
 export interface Product {
   id: string;
   sku: string;
@@ -17,6 +25,67 @@ export interface Product {
   categoryId?: number;
   category?: string;
   categoryCode?: string;
+  hasVariations?: boolean;
+  variations?: ProductVariation[];
+}
+
+// Recipe Module Types
+export interface RecipeTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  base_cost: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecipeItem {
+  id: number;
+  recipe_id: number;
+  ingredient_id: number;
+  usage_qty: number;
+  usage_uom_code: string;
+  cost: number;
+}
+
+export interface RecipeLink {
+  id: number;
+  recipe_id: number;
+  product_id?: number;
+  variation_id?: number;
+  is_default: boolean;
+}
+
+export interface CreateRecipeTemplateRequest {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateRecipeTemplateRequest {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+export interface CreateRecipeItemRequest {
+  recipe_id: number;
+  ingredient_id: number;
+  usage_qty: number;
+  usage_uom_code: string;
+}
+
+export interface UpdateRecipeItemRequest {
+  id: number;
+  ingredient_id: number;
+  usage_qty: number;
+  usage_uom_code: string;
+}
+
+export interface LinkRecipeRequest {
+  recipe_id: number;
+  product_id?: number;
+  variation_id?: number;
+  is_default: boolean;
 }
 
 export interface Category {
@@ -42,6 +111,8 @@ export interface CartItem {
   beneficiaryId?: string; // Beneficiary ID for SC/PWD/Athlete discounts
   beneficiaryName?: string; // Beneficiary name for SC/PWD/Athlete discounts
   newlyAdded?: number; // Timestamp when item was added (for visual emphasis)
+  variationId?: number; // Selected variation ID
+  variationName?: string; // Selected variation name
 }
 
 // Transaction Item with VAT Breakdown
@@ -261,7 +332,7 @@ export interface ProductResponse {
   name: string;
   price: number;
   category_id?: number;
-  recipe_cost: number;
+  has_variations: boolean;
 }
 
 export interface CreateProductRequest {
@@ -269,7 +340,6 @@ export interface CreateProductRequest {
   name: string;
   price: number;
   category_id?: number;
-  recipe_cost: number;
 }
 
 export interface UpdateProductRequest {
@@ -278,7 +348,6 @@ export interface UpdateProductRequest {
   name: string;
   price: number;
   category_id?: number;
-  recipe_cost: number;
 }
 
 export interface CategoryResponse {
@@ -314,6 +383,86 @@ export interface BatchImportResponse {
   success_count: number;
   error_count: number;
   errors: string[];
+}
+
+// Bundle Types
+export interface BundleResponse {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BundleItemResponse {
+  id: number;
+  bundle_id: number;
+  product_id: number;
+  product_name: string;
+  product_sku: string;
+  quantity: number;
+}
+
+export interface CreateBundleRequest {
+  name: string;
+  description?: string;
+  price: number;
+}
+
+export interface UpdateBundleRequest {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;
+  is_active: boolean;
+}
+
+export interface AddBundleItemRequest {
+  bundle_id: number;
+  product_id: number;
+  quantity: number;
+}
+
+// Add-on Types
+export interface AddOnResponse {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AddOnItemResponse {
+  id: number;
+  add_on_id: number;
+  product_id: number;
+  product_name: string;
+  product_sku: string;
+  quantity: number;
+}
+
+export interface CreateAddOnRequest {
+  name: string;
+  description?: string;
+  price: number;
+}
+
+export interface UpdateAddOnRequest {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;
+  is_active: boolean;
+}
+
+export interface AddAddOnItemRequest {
+  add_on_id: number;
+  product_id: number;
+  quantity: number;
 }
 
 export interface DiscountCodeResponse {
@@ -470,6 +619,7 @@ export interface CreateRecipeRequest {
   ingredient_id: number;
   usage_qty: number;
   usage_uom_code: string;
+  variation_id?: number;
 }
 
 export interface UpdateRecipeRequest {
@@ -478,6 +628,7 @@ export interface UpdateRecipeRequest {
   ingredient_id: number;
   usage_qty: number;
   usage_uom_code: string;
+  variation_id?: number;
 }
 
 export interface CsvIngredientRow {
@@ -504,4 +655,27 @@ export interface BulkRecipeLine {
   cost: number;
   isNew: boolean;
   isDeleted: boolean;
+  variation_id?: number;
+}
+
+// Product Variations Types
+export interface ProductVariationResponse {
+  id: number;
+  product_id: number;
+  name: string;
+  price: number;
+  is_active: boolean;
+}
+
+export interface CreateVariationRequest {
+  product_id: number;
+  name: string;
+  price: number;
+}
+
+export interface UpdateVariationRequest {
+  id: number;
+  name: string;
+  price: number;
+  is_active: boolean;
 }

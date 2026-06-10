@@ -111,7 +111,7 @@ export default function CategoriesTab({ categories, loadInventoryData }: Categor
             </CardHeader>
             <CardContent>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto scrollbar-hide">
                         <DialogHeader>
                             <DialogTitle>{editingCategory ? 'Edit Category' : 'Add Category'}</DialogTitle>
                             <DialogDescription>

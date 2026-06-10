@@ -8,9 +8,10 @@ import { usePOS } from "@/lib/context";
 
 interface ProductGridProps {
     disabled?: boolean;
+    onProductClick?: (product: any) => void;
 }
 
-export function ProductGrid({ disabled = false }: ProductGridProps) {
+export function ProductGrid({ disabled = false, onProductClick }: ProductGridProps) {
 
     const { products, addToCart } = usePOS();
     const [searchQuery, setSearchQuery] = useState("");
@@ -60,7 +61,15 @@ export function ProductGrid({ disabled = false }: ProductGridProps) {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                     {   filteredProducts.map((product) => (
                         <Card   key={`${product.id}-${product.sku}`}
-                                onClick={(e) => { if (!disabled) addToCart(product, 1)}}
+                                onClick={(e) => {
+                                    if (!disabled) {
+                                        if (product.hasVariations && onProductClick) {
+                                            onProductClick(product);
+                                        } else {
+                                            addToCart(product, 1);
+                                        }
+                                    }
+                                }}
                                 className={`border border-slate-200 p-3 cursor-pointer transition-all active:scale-95 flex flex-col ${disabled ? 'opacity-50 cursor-not-allowed' : 'active:border-blue-500'}`}
                                 >
                                 {/* Product Info */}

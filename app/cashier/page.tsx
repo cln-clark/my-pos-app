@@ -5,13 +5,14 @@ import { CartPanel } from "@/components/pos/cart";
 import { ProductGrid} from "@/components/pos/product-grid";
 import { Button } from "@/components/ui/button";
 import { usePOS} from "@/lib/context";
-import { PaymentMethod, TxnMode } from "@/lib/types";
+import { PaymentMethod, TxnMode, ProductVariationResponse } from "@/lib/types";
 import { PaymentScreen } from "@/components/pos/payment-screen";
 import { TxnModeSelector } from "@/components/pos/txn-mode-selector";
 import { DiscountModal } from "@/components/pos/discount-qty-modal";
 import { CardPaymentModal } from "@/components/pos/card-payment-modal";
 import { CardPaymentData } from "@/lib/types";
 import { TransactionSuccessModal } from "@/components/pos/transaction-success-modal";
+import { VariationSelectionModal } from "@/components/pos/variation-selection-modal";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { generateReceiptText, mapTransactionToReceiptDataFromState } from "@/lib/receipt";
@@ -23,7 +24,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function CashierPage() {
 
-    const { currentUser, cart, getCartTotal, clearCart, createTransaction, discountCodes, calculateDiscount, calculateItemVATBreakdown, businessDayOpen, fetchBusinessDayStatus, logout } = usePOS();
+    const { currentUser, cart, getCartTotal, clearCart, createTransaction, discountCodes, calculateDiscount, calculateItemVATBreakdown, businessDayOpen, fetchBusinessDayStatus, logout, products, productVariations, loadProductVariations, addToCart } = usePOS();
     const [ paymentOpen, setPaymentOpen ]  = useState(false)
     const [ cardPaymentOpen, setCardPaymentOpen ]  = useState(false)
     const [ cardPaymentData, setCardPaymentData ]  = useState<CardPaymentData | null>(null)
@@ -36,6 +37,8 @@ export default function CashierPage() {
     const [ isProcessing, setIsProcessing ] = useState(false)
     const [ successModalOpen, setSuccessModalOpen ] = useState(false)
     const [ lastTransaction, setLastTransaction ] = useState<{ id: string; total: number; paymentMethod: string } | null>(null)
+    const [ variationModalOpen, setVariationModalOpen ] = useState(false)
+    const [ selectedProductForVariation, setSelectedProductForVariation ] = useState<any>(null)
     const subtotal = getCartTotal();
     const discountAmount = calculateDiscount(cart);
     const total = subtotal - discountAmount;
@@ -43,6 +46,23 @@ export default function CashierPage() {
     useEffect(() => {
         fetchBusinessDayStatus();
     }, [fetchBusinessDayStatus]);
+
+    const handleProductClick = async (product: any) => {
+        if (product.hasVariations) {
+            setSelectedProductForVariation(product);
+            await loadProductVariations(product.id);
+            setVariationModalOpen(true);
+        } else {
+            addToCart(product, 1);
+        }
+    };
+
+    const handleVariationSelect = (variation: ProductVariationResponse) => {
+        const product = { ...selectedProductForVariation, price: variation.price };
+        addToCart(product, 1, variation.id, variation.name);
+        setVariationModalOpen(false);
+        setSelectedProductForVariation(null);
+    };
 
     const handlePaymentComplete = async (method: PaymentMethod, change: number) => {
         // If card payment, show card payment modal first
@@ -183,7 +203,7 @@ export default function CashierPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 flex-1 min-h-0 relative">
                         {/* Products Section */}
                         <div className="lg:col-span-3 overflow-y-auto min-h-0">
-                            <ProductGrid disabled={!businessDayOpen}/>
+                            <ProductGrid disabled={!businessDayOpen} onProductClick={handleProductClick}/>
                         </div>
 
                         {/* Order Section - Side panel on desktop, drawer on mobile */}
@@ -328,6 +348,19 @@ export default function CashierPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Variation Selection Modal */}
+            {selectedProductForVariation && (
+                <VariationSelectionModal
+                    open={variationModalOpen}
+                    onClose={() => {
+                        setVariationModalOpen(false);
+                        setSelectedProductForVariation(null);
+                    }}
+                    variations={productVariations.get(selectedProductForVariation.id) || []}
+                    onSelectVariation={handleVariationSelect}
+                />
+            )}
         </AppLayout>
     );
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect  } from "react";
-import { User, Product, CartItem, Transaction, Category, TransactionItem, DiscountCodeResponse, UnitMasterResponse, IngredientMasterFileResponse, ConversionFileResponse, ProductsRecipeResponse } from './types';
-import { getProducts, getCategories, getDiscountCodes, createTransaction as createTransactionData, createPosZxReading, loginUser as loginUserApi, getUnits, getIngredients, getConversions, getProductRecipe } from "./data";
+import { User, Product, CartItem, Transaction, Category, TransactionItem, DiscountCodeResponse, UnitMasterResponse, IngredientMasterFileResponse, ConversionFileResponse, ProductsRecipeResponse, ProductVariationResponse } from './types';
+import { getProducts, getCategories, getDiscountCodes, createTransaction as createTransactionData, createPosZxReading, loginUser as loginUserApi, getUnits, getIngredients, getConversions, getProductRecipe, getProductVariations } from "./data";
 import { calculateItemVATBreakdown as calculateItemVAT, calculateSalesBreakdown } from './bir-computation';
 import { toast } from 'sonner';
 import { invoke } from '@tauri-apps/api/core';
@@ -16,7 +16,7 @@ interface POSContextType {
     categories: Category[];
     discountCodes: DiscountCodeResponse[];
     cart: CartItem[];
-    addToCart: (product: Product, quantity: number) => void;
+    addToCart: (product: Product, quantity: number, variationId?: number, variationName?: string) => void;
     updateCartQuantity: (productId: string, quantity: number) =>  void;
     updateDiscountQty: (productId: string, discountQty: number, beneficiaryId?: string, beneficiaryName?: string) => void;
     setItemDiscountCode: (productId: string, discountCode: number | undefined) => void;
@@ -48,8 +48,10 @@ interface POSContextType {
     ingredients: IngredientMasterFileResponse[];
     conversions: ConversionFileResponse[];
     productRecipes: Map<string, ProductsRecipeResponse[]>;
+    productVariations: Map<string, ProductVariationResponse[]>;
     loadInventoryData: () => Promise<void>;
     loadProductRecipe: (productId: string) => Promise<void>;
+    loadProductVariations: (productId: string) => Promise<void>;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -69,6 +71,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     const [ingredients, setIngredients] = useState<IngredientMasterFileResponse[]>([]);
     const [conversions, setConversions] = useState<ConversionFileResponse[]>([]);
     const [productRecipes, setProductRecipes] = useState<Map<string, ProductsRecipeResponse[]>>(new Map());
+    const [productVariations, setProductVariations] = useState<Map<string, ProductVariationResponse[]>>(new Map());
 
     const setManagerAuth = useCallback((manager: User | null, source?: 'main' | 'override') => {
         setManagerAuthState(manager);
@@ -117,6 +120,15 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    const loadProductVariations = useCallback(async (productId: string) => {
+        try {
+            const variationData = await getProductVariations(parseInt(productId));
+            setProductVariations(prev => new Map(prev).set(productId, variationData));
+        } catch (error) {
+            console.error('Failed to load product variations:', error);
+        }
+    }, []);
+
     const fetchBusinessDayStatus = useCallback(async () => {
         try {
             const isOpen = await invoke<boolean>('get_business_day_status');
@@ -143,16 +155,16 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
-   const addToCart = useCallback((product: Product, quantity: number) => {
+   const addToCart = useCallback((product: Product, quantity: number, variationId?: number, variationName?: string) => {
         setCart((prev) => {
-            const existingItem = prev.find((item) => item.product.id === product.id)
+            const existingItem = prev.find((item) => item.product.id === product.id && item.variationId === variationId)
             if(existingItem){
                 return prev.map((item) =>
-                        item.product.id === product.id ?
+                        item.product.id === product.id && item.variationId === variationId ?
                             { ...item, quantity: item.quantity + quantity}
                             : item
             )};
-            return [{ product, quantity, discountQty: 0, discountCode: undefined, discountMode: undefined, totalPortion: undefined, regularPortionDiscount: undefined, newlyAdded: Date.now() }, ...prev]
+            return [{ product, quantity, discountQty: 0, discountCode: undefined, discountMode: undefined, totalPortion: undefined, regularPortionDiscount: undefined, newlyAdded: Date.now(), variationId, variationName }, ...prev]
         })
     }, []);
  
@@ -528,8 +540,10 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         ingredients,
         conversions,
         productRecipes,
+        productVariations,
         loadInventoryData,
-        loadProductRecipe
+        loadProductRecipe,
+        loadProductVariations
     };
 
     

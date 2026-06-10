@@ -100,10 +100,17 @@ export default function ManagerDashboardPage() {
         },
         {
             title: "Inventory Management",
-            description: "Manage products and stock",
+            description: "Manage stocks",
             icon: Package,
             path: "/manager/inventory",
             color: "bg-purple-500"
+        },
+        {
+            title: "Products",
+            description: "Manage products",
+            icon: Package,
+            path: "/manager/products",
+            color: "bg-blue-500"
         },
         {
             title: "User Management",
@@ -170,7 +177,7 @@ export default function ManagerDashboardPage() {
             />
 
             <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
-                <DialogContent>
+                <DialogContent className="scrollbar-hide">
                     <DialogHeader>
                         <DialogTitle>
                             {pendingAction === 'day-start' ? 'Start Business Day' : 'End Business Day'}

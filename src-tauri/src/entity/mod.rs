@@ -20,4 +20,12 @@ pub mod unit_master;
 pub mod ingredient_master_file;
 pub mod conversion_file;
 pub mod products_recipe;
+pub mod product_variations;
+pub mod recipe_templates;
+pub mod recipe_items;
+pub mod recipe_product_links;
+pub mod bundle;
+pub mod add_on;
+pub mod bundle_item;
+pub mod add_on_item;
 

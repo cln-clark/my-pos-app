@@ -258,7 +258,7 @@ export default function IngredientsTab({ ingredients, units, loadInventoryData }
             </CardHeader>
             <CardContent>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto scrollbar-hide">
                         <DialogHeader>
                             <DialogTitle>{editingIngredient ? 'Edit Ingredient' : 'Add Ingredient'}</DialogTitle>
                             <DialogDescription>
@@ -345,7 +345,7 @@ export default function IngredientsTab({ ingredients, units, loadInventoryData }
                 </Dialog>
 
                 <Dialog open={isRestockDialogOpen} onOpenChange={setIsRestockDialogOpen}>
-                    <DialogContent>
+                    <DialogContent className="scrollbar-hide">
                         <DialogHeader>
                             <DialogTitle>Restock Ingredient</DialogTitle>
                             <DialogDescription>
