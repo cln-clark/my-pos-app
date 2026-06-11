@@ -101,13 +101,14 @@ export default function CategoriesTab({ categories, loadInventoryData }: Categor
     };
 
     return (
-        <Card>
+        <Card className='rounded-md pt-4'>
             <CardHeader className='flex items-center justify-between'>
                 <div>
                     <CardTitle>Categories</CardTitle>
                     <CardDescription>Manage product categories</CardDescription>
                 </div>
-                <Button onClick={handleAddCategory}>Add Category</Button>
+                <Button onClick={handleAddCategory}
+                        className='rounded-md'>Add Category</Button>
             </CardHeader>
             <CardContent>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -149,7 +150,7 @@ export default function CategoriesTab({ categories, loadInventoryData }: Categor
                     </DialogContent>
                 </Dialog>
 
-                <div className="h-122 overflow-y-auto border rounded-md">
+                <div className="h-125 overflow-y-auto border rounded-md">
                     <Table>
                         <TableHeader className="bg-slate-100">
                             <TableRow>

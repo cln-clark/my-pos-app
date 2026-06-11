@@ -20,29 +20,29 @@ export default function ProductsPage() {
     return (
         <ManagerLayout>
             <div className="flex flex-col h-full">
-                <h1 className="text-2xl font-bold mb-4">Products Management</h1>
+                <h1 className="text-xl font-semibold">Products Management</h1>
                 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="products">Products</TabsTrigger>
-                        <TabsTrigger value="categories">Categories</TabsTrigger>
-                        <TabsTrigger value="bundles">Bundles</TabsTrigger>
-                        <TabsTrigger value="add-ons">Add-ons</TabsTrigger>
+                    <TabsList className="grid w-full grid-cols-4 p-0">
+                        <TabsTrigger className='text-sm' value="products">Products</TabsTrigger>
+                        <TabsTrigger className='text-sm' value="categories">Categories</TabsTrigger>
+                        <TabsTrigger className='text-sm' value="bundles">Bundles</TabsTrigger>
+                        <TabsTrigger className='text-sm' value="add-ons">Add-ons</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="products" className="mt-4">
+                    <TabsContent value="products" className="">
                         <ProductsTab products={products} categories={categories} ingredients={ingredients} units={units} conversions={conversions} loadInventoryData={loadInventoryData} />
                     </TabsContent>
 
-                    <TabsContent value="categories" className="mt-4">
+                    <TabsContent value="categories" className="">
                         <CategoriesTab categories={categories} loadInventoryData={loadInventoryData} />
                     </TabsContent>
 
-                    <TabsContent value="bundles" className="mt-4">
+                    <TabsContent value="bundles" className="">
                         <BundleTab products={products} loadInventoryData={loadInventoryData} />
                     </TabsContent>
 
-                    <TabsContent value="add-ons" className="mt-4">
+                    <TabsContent value="add-ons" className="">
                         <AddonsTab products={products} loadInventoryData={loadInventoryData} />
                     </TabsContent>
                 </Tabs>

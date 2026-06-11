@@ -612,6 +612,7 @@ export interface ProductsRecipeResponse {
   usage_qty: number;
   usage_uom_code: string;
   cost: number;
+  variation_id?: number;
 }
 
 export interface CreateRecipeRequest {

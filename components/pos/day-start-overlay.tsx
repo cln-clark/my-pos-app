@@ -44,7 +44,7 @@ export function DayStartOverlay({ open, onClose }: DayStartOverlayProps) {
 
     return (
         <div className="fixed inset-0 z-50 bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
-            <div className="bg-white rounded-2xl shadow-2xl p-12 max-w-md w-full mx-4 text-center">
+            <div className="bg-white rounded-md shadow-2xl p-12 max-w-md w-full mx-4 text-center">
                 <div className="mb-8">
                     <div className="inline-flex items-center justify-center w-20 h-20 bg-indigo-100 rounded-full mb-4">
                         <Calendar className="w-10 h-10 text-indigo-600" />

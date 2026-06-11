@@ -148,21 +148,21 @@ export default function ManagerDashboardPage() {
         <ManagerLayout>
             <div className="flex flex-col h-full gap-6">
                 {/* Module Grid */}
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
                     {modules.map((module) => {
                         const Icon = module.icon;
                         return (
                             <Card
                                 key={module.path || module.title}
-                                className={`cursor-pointer hover:shadow-lg active:shadow-md transition-shadow touch-target ${module.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`rounded-md cursor-pointer hover:shadow-lg active:shadow-md transition-shadow touch-target ${module.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 onClick={() => !module.disabled && (module.action ? module.action() : router.push(module.path!))}
                             >
                                 <CardHeader>
                                     <div className={`w-12 h-12 rounded-lg ${module.color} flex items-center justify-center mb-4 ${module.disabled ? 'opacity-50' : ''}`}>
-                                        <Icon className="h-6 w-6 text-white" />
+                                        <Icon className="h-5 w-5 text-white" />
                                     </div>
-                                    <CardTitle className="text-xl">{module.title}</CardTitle>
-                                    <CardDescription>{module.description}</CardDescription>
+                                    <CardTitle className="text-md">{module.title}</CardTitle>
+                                    <CardDescription className="text-md">{module.description}</CardDescription>
                                 </CardHeader>
                             </Card>
                         );

@@ -109,12 +109,12 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className="flex flex-col h-screen bg-gray-50">
             {/* Kiosk Header */}
-            <header className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
+            <header className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between shrink-0 h-15">
                 <div className="flex items-center gap-4">
                     <Button
                         variant="outline"
                         onClick={pathname === '/manager' ? handleBackToMain : handleBack}
-                        className="h-12 px-4 text-slate-900 touch-target font-medium"
+                        className="text-sm h-10 w-20 px-2 text-slate-900 touch-target font-medium rounded-md"
                     >
                         <ArrowLeft className="h-5 w-5" />
                         Back
@@ -145,7 +145,8 @@ export function ManagerLayout({ children }: { children: React.ReactNode }) {
                     )}
                 </div>
             </header>
-            <main className="flex-1 h-full p-6 overflow-auto">
+            
+            <main className="flex-1 h-full p-4 overflow-auto">
                 {children}
             </main>
             <Toaster />
